@@ -861,7 +861,9 @@
     function mergeReviews(local, shared) {
       const map = new Map();
       [...shared, ...local].forEach(r => map.set(r.id, r));
-      return [...map.values()].sort((a, b) => (b.ts || 0) - (a.ts || 0));
+      return [...map.values()].sort((a, b) =>
+        new Date(b.ts || 0).getTime() - new Date(a.ts || 0).getTime()
+      );
     }
 
     async function loadSharedReviews() {
@@ -942,18 +944,22 @@
       const donated = document.getElementById('reviewDonatedCheck').checked;
       if (!stars) { alert('Selecione uma avaliação de 1 a 5 estrelas.'); return; }
       if (!name)  { alert('Digite seu nome.'); return; }
+      const now = new Date();
       const review = {
-        id: `${PROJECT_ID}_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,
+        id: `${PROJECT_ID}_${now.getTime()}_${Math.random().toString(36).slice(2,7)}`,
         name, comment, stars, donated,
-        date: new Date().toLocaleDateString('pt-BR'),
-        ts: Date.now()
+        date: now.toLocaleDateString('pt-BR'),
+        ts: now.toISOString()
       };
       localReviews = [review, ...localReviews];
       try { localStorage.setItem('ktm_reviews', JSON.stringify(localReviews)); } catch(e) {}
       renderReviewsList();
+      const btnEnviar = document.querySelector('#reviewFormMode .primary-btn');
+      if (btnEnviar) { btnEnviar.disabled = true; btnEnviar.textContent = 'Enviando...'; }
       await pushReviewToCloud(review);
       document.getElementById('reviewFormMode').classList.add('hidden');
       document.getElementById('reviewThankYou').classList.remove('hidden');
+      if (btnEnviar) { btnEnviar.disabled = false; btnEnviar.textContent = 'Enviar avaliação'; }
     }
 
     const defaultState = {
