@@ -13,7 +13,7 @@
   <meta name="theme-color" content="#2563eb" />
   <link rel="manifest" href="./manifest.json" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -798,22 +798,18 @@
 
     // Gerador EMV PIX — Banco Central
     function pixEmv(key, name, city, amount) {
-      function field(id, val) { return `${id}${String(val.length).padStart(2,'0')}${val}`; }
-      const mai = field('26', field('00','br.gov.bcb.pix') + field('01', key));
-      const adf = field('62', field('05','***'));
-      let emv = field('00','01') + mai + field('52','0000') + field('53','986') +
-        (amount ? field('54', amount) : '') +
-        field('58','BR') + field('59', name.slice(0,25)) + field('60', city.slice(0,15)) +
+      const f = (id, val) => { const v = String(val); return id + String(v.length).padStart(2,'0') + v; };
+      const adf = f('62', f('05','***'));
+      let emv = f('00','01') + mai + f('52','0000') + f('53','986') +
+        (amount && parseFloat(amount) > 0 ? f('54', parseFloat(amount).toFixed(2)) : '') +
+        f('58','BR') + f('59', name.slice(0,25)) + f('60', city.slice(0,15)) +
         adf + '6304';
-      function crc16(s) {
-        let c = 0xFFFF;
-        for (let i = 0; i < s.length; i++) {
-          c ^= s.charCodeAt(i) << 8;
-          for (let j = 0; j < 8; j++) c = (c & 0x8000) ? ((c << 1) ^ 0x1021) : (c << 1);
-        }
-        return (c & 0xFFFF).toString(16).toUpperCase().padStart(4,'0');
+      let crc = 0xFFFF;
+      for (let i = 0; i < emv.length; i++) {
+        crc ^= emv.charCodeAt(i) << 8;
+        for (let j = 0; j < 8; j++) { crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1); crc &= 0xFFFF; }
       }
-      return emv + crc16(emv);
+      return emv + crc.toString(16).toUpperCase().padStart(4,'0');
     }
 
     let _pixCode = '';
@@ -822,18 +818,18 @@
       document.getElementById('pixModal').classList.remove('hidden');
       _pixCode = pixEmv(PIX_KEY, PIX_NAME, PIX_CITY, '');
       const container = document.getElementById('pixQrContainer');
-      container.innerHTML = '<p style="color:#9ca3af;font-size:0.8rem">Gerando QR Code...</p>';
-      if (typeof QRCode !== 'undefined') {
-        QRCode.toDataURL(_pixCode, { width: 200, margin: 2, color: { dark: '#000000', light: '#ffffff' } })
-          .then(url => {
-            container.innerHTML = `<img src="${url}" width="200" height="200"
-              style="border-radius:8px;display:block;margin:0 auto" alt="QR Code PIX" />`;
-          })
-          .catch(err => {
-            console.error('[PIX] QR error:', err);
-            container.innerHTML = '<p style="color:#9ca3af;font-size:0.8rem">Copie o código abaixo para pagar.</p>';
-          });
-      } else {
+      container.innerHTML = '';
+      try {
+        new QRCode(container, {
+          text: _pixCode,
+          width: 200,
+          height: 200,
+          colorDark: '#000000',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      } catch(e) {
+        console.error('[PIX] QR error:', e);
         container.innerHTML = '<p style="color:#9ca3af;font-size:0.8rem">Copie o código abaixo para pagar.</p>';
       }
     }
