@@ -817,16 +817,23 @@
       document.getElementById('pixModal').classList.remove('hidden');
       _pixCode = pixEmv(PIX_KEY, PIX_NAME, PIX_CITY, '');
       const container = document.getElementById('pixQrContainer');
-      const qrUrl = 'https://chart.googleapis.com/chart?chs=200x200&cht=qr&choe=UTF-8&chl='
-        + encodeURIComponent(_pixCode);
+      const encoded = encodeURIComponent(_pixCode);
+      const qr1 = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=4&data=' + encoded;
+      const qr2 = 'https://chart.googleapis.com/chart?chs=200x200&cht=qr&choe=UTF-8&chl=' + encoded;
       container.innerHTML = `
-        <img src="${qrUrl}" width="200" height="200"
+        <img id="pixQrImg" src="${qr1}" width="200" height="200"
           style="border-radius:8px;background:#fff;padding:6px;display:block;margin:0 auto"
-          alt="QR Code PIX"
-          onerror="this.style.display='none';document.getElementById('pixQrFallback').style.display='block'" />
-        <p id="pixQrFallback" style="display:none;color:#9ca3af;font-size:0.8rem;text-align:center">
+          alt="QR Code PIX" />
+        <p id="pixQrFallback" style="display:none;color:#9ca3af;font-size:0.8rem;text-align:center;margin-top:0.5rem">
           Copie o código abaixo para pagar.
         </p>`;
+      document.getElementById('pixQrImg').onerror = function() {
+        this.src = qr2;
+        this.onerror = function() {
+          this.style.display = 'none';
+          document.getElementById('pixQrFallback').style.display = 'block';
+        };
+      };
     }
     function closePixModal() { document.getElementById('pixModal').classList.add('hidden'); }
     function copyPixCode() {
