@@ -578,7 +578,43 @@
           <div id="weekPaymentInfo" class="task-meta" style="margin-top:0.25rem;"></div>
         </div>
 
-        <div class="app-footer" style="margin-top:1rem">
+        <section id="view-goals" class="view">
+        <h1 class="view-title">🏆 Conquistas</h1>
+
+        <div class="progress-card" style="text-align:center">
+          <div class="progress-label">Pontos acumulados para metas</div>
+          <div id="totalGoalPointsEl" style="font-size:2.5rem;font-weight:700;color:#f97316;margin:0.5rem 0">0</div>
+          <div style="font-size:0.8rem;color:#9ca3af">pts de tarefas 🏆 Meta aprovadas</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">Metas e Recompensas</div>
+          <div id="goalsList"></div>
+        </div>
+
+        <div class="card parent-only">
+          <div class="card-header">Adicionar nova meta</div>
+          <form id="newGoalForm" class="form-vertical">
+            <label>
+              Nome da recompensa *
+              <input id="newGoalTitle" type="text" placeholder="Ex: Novo videogame" required />
+            </label>
+            <label>
+              Ícone (emoji)
+              <input id="newGoalIcon" type="text" placeholder="🎮" maxlength="4"
+                style="max-width:80px" />
+            </label>
+            <label>
+              Pontos necessários *
+              <input id="newGoalTarget" type="number" min="1" value="100" required
+                style="max-width:120px" />
+            </label>
+            <button type="submit" class="primary-btn">Adicionar meta</button>
+          </form>
+        </div>
+      </section>
+
+      <div class="app-footer" style="margin-top:1rem">
           <button class="footer-btn" onclick="openPixModal()" title="Apoiar o projeto via PIX">☕ Apoiar</button>
           <button class="footer-btn" onclick="openReviewsModal('list')" title="Ver avaliações dos usuários">⭐ Avaliações</button>
           <span id="appVersion">© MGC · v1.0.0</span>
@@ -681,6 +717,7 @@
       <button class="nav-btn nav-btn-active" data-view="today" type="button">Hoje</button>
       <button class="nav-btn" data-view="tasks" type="button">Tarefas</button>
       <button class="nav-btn" data-view="week" type="button">Semana</button>
+      <button class="nav-btn" data-view="goals" type="button">🏆 Metas</button>
       <button class="nav-btn" data-view="settings" type="button">Config.</button>
     </nav>
   </div>
@@ -1032,6 +1069,8 @@
       childNameRemote: '',
       childrenList: [],
       pointValueBRL: 0.10,
+      totalGoalPoints: 0,
+      goals: [],
       tasks: [
         { id: 't1', title: 'Arrumar a cama', points: 5, frequency: 'daily', rewardType: 'money' },
         { id: 't2', title: 'Guardar os brinquedos', points: 5, frequency: 'daily', rewardType: 'money' },
@@ -1100,8 +1139,10 @@
       today: document.getElementById('view-today'),
       tasks: document.getElementById('view-tasks'),
       week: document.getElementById('view-week'),
+      goals: document.getElementById('view-goals'),
       settings: document.getElementById('view-settings'),
     };
+    const totalGoalPointsEl = document.getElementById('totalGoalPointsEl');
     const navButtons = Array.from(document.querySelectorAll('.nav-btn'));
 
     const modeChildBtn = document.getElementById('modeChildBtn');
@@ -1267,6 +1308,7 @@
       const brl = (moneyPts * rate).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       weekMoneyTotalEl.textContent = brl;
       weekGoalPointsEl.textContent = goalPts + ' pts';
+      if (totalGoalPointsEl) totalGoalPointsEl.textContent = state.totalGoalPoints || 0;
 
       weekPaymentStatusEl.textContent = state.weekPaid ? 'Pago' : 'A pagar';
 
@@ -1406,6 +1448,9 @@
 
         approveBtn.addEventListener('click', async () => {
           inst.status = 'approved';
+          if ((task.rewardType || 'money') === 'goal') {
+            state.totalGoalPoints = (state.totalGoalPoints || 0) + task.points;
+          }
           saveState();
           if (supabaseClient) {
             await syncInstanceToSupabase(inst);
@@ -1434,6 +1479,73 @@
 
         pendingApprovalListEl.appendChild(li);
       });
+    }
+
+    function renderGoals() {
+      const list = document.getElementById('goalsList');
+      if (!list) return;
+      const goals = state.goals || [];
+      const totalPts = state.totalGoalPoints || 0;
+      if (totalGoalPointsEl) totalGoalPointsEl.textContent = totalPts;
+
+      if (!goals.length) {
+        list.innerHTML = '<p style="color:#6b7280;font-size:0.85rem;text-align:center;padding:0.75rem 0">' +
+          'Nenhuma meta cadastrada ainda.<br>Adicione uma meta abaixo (modo Responsável).</p>';
+        return;
+      }
+
+      list.innerHTML = '';
+      goals.forEach(goal => {
+        const pct = Math.min(100, goal.targetPoints > 0
+          ? Math.round((totalPts / goal.targetPoints) * 100) : 0);
+        const reached = totalPts >= goal.targetPoints;
+        const icon = goal.icon || '🏆';
+        const div = document.createElement('div');
+        div.style.cssText = 'padding:0.75rem 0;border-bottom:1px solid rgba(148,163,184,0.12)';
+
+        const barColor = goal.delivered
+          ? 'linear-gradient(90deg,#6b7280,#9ca3af)'
+          : reached
+            ? 'linear-gradient(90deg,#22c55e,#a3e635)'
+            : 'linear-gradient(90deg,#f97316,#facc15)';
+
+        let actionHtml = '';
+        if (goal.delivered) {
+          actionHtml = '<span style="font-size:0.78rem;color:#6b7280">✅ Recompensa entregue</span>';
+        } else if (reached && state.mode === 'parent') {
+          actionHtml = `<button type="button" onclick="deliverGoal('${goal.id}')"
+            class="primary-btn" style="font-size:0.78rem;padding:3px 14px;margin-top:0.3rem">
+            🎁 Marcar como entregue</button>`;
+        } else if (reached) {
+          actionHtml = '<span style="font-size:0.78rem;color:#22c55e;font-weight:600">🎉 Meta atingida! Fale com o responsável.</span>';
+        } else {
+          const faltam = goal.targetPoints - totalPts;
+          actionHtml = `<span style="font-size:0.78rem;color:#9ca3af">Faltam ${faltam} pts</span>`;
+        }
+
+        div.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.35rem">
+            <span style="font-weight:600;font-size:0.9rem">${icon} ${esc(goal.title)}</span>
+            <span style="font-size:0.82rem;color:${reached ? '#22c55e' : '#9ca3af'}">
+              ${totalPts}/${goal.targetPoints} pts
+            </span>
+          </div>
+          <div class="progress-bar" style="margin-bottom:0.35rem">
+            <div class="progress-bar-fill" style="width:${pct}%;background:${barColor}"></div>
+          </div>
+          ${actionHtml}`;
+        list.appendChild(div);
+      });
+    }
+
+    function deliverGoal(goalId) {
+      const goal = (state.goals || []).find(g => g.id === goalId);
+      if (!goal) return;
+      if (!confirm(`Marcar "${goal.title}" como entregue? Esta ação não pode ser desfeita.`)) return;
+      goal.delivered = true;
+      goal.deliveredAt = new Date().toISOString();
+      saveState();
+      renderGoals();
     }
 
     function renderSettings() {
@@ -1511,6 +1623,8 @@
         renderAllTasks();
       } else if (view === 'week') {
         renderPendingApproval();
+      } else if (view === 'goals') {
+        renderGoals();
       } else if (view === 'settings') {
         renderSettings();
       }
@@ -1987,6 +2101,25 @@
     settingMoneyForParentsInput.addEventListener('change', () => {
       state.moneyOnlyForParents = settingMoneyForParentsInput.checked;
       saveState();
+    });
+
+    document.getElementById('newGoalForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const title = document.getElementById('newGoalTitle').value.trim();
+      const icon  = document.getElementById('newGoalIcon').value.trim() || '🏆';
+      const target = parseInt(document.getElementById('newGoalTarget').value, 10);
+      if (!title || !target || target <= 0) return;
+      if (!state.goals) state.goals = [];
+      state.goals.push({
+        id: 'g' + Date.now(),
+        title, icon, targetPoints: target,
+        delivered: false, deliveredAt: null,
+      });
+      saveState();
+      renderGoals();
+      document.getElementById('newGoalTitle').value = '';
+      document.getElementById('newGoalIcon').value = '';
+      document.getElementById('newGoalTarget').value = 100;
     });
 
     settingPointValueInput.addEventListener('input', () => {
