@@ -1,6 +1,6 @@
 /* KidsTasks — Service Worker v1.0.0 */
 
-const CACHE_NAME = 'kidstasks-v11';
+const CACHE_NAME = 'kidstasks-v12';
 
 self.addEventListener('install', event => {
   self.skipWaiting();

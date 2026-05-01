@@ -466,18 +466,18 @@
           <div class="child-info">
             <div class="child-name" id="childName">Alice</div>
             <div class="child-week-summary">
-              Semana: <span id="childWeekPoints">0</span> pts
+              Hoje: <span id="childTodayPoints">0</span> pts aprovados
             </div>
           </div>
         </div>
 
         <div class="progress-card">
-          <div class="progress-label">Progresso da semana</div>
+          <div class="progress-label">Progresso de hoje</div>
           <div class="progress-bar">
-            <div id="weekProgressBar" class="progress-bar-fill" style="width: 0;"></div>
+            <div id="todayProgressBar" class="progress-bar-fill" style="width: 0;"></div>
           </div>
           <div class="progress-count">
-            <span id="tasksDoneCount">0</span>/<span id="tasksTotalCount">0</span> tarefas concluídas
+            <span id="tasksDoneCount">0</span>/<span id="tasksTotalCount">0</span> tarefas de hoje concluídas
           </div>
         </div>
 
@@ -519,6 +519,16 @@
 
       <section id="view-week" class="view">
         <h1 class="view-title">Semana</h1>
+
+        <div class="progress-card">
+          <div class="progress-label">Progresso da semana (Dom – Sáb)</div>
+          <div class="progress-bar">
+            <div id="weekProgressBar" class="progress-bar-fill" style="width: 0;"></div>
+          </div>
+          <div class="progress-count">
+            <span id="weekTasksDone">0</span>/<span id="weekTasksTotal">0</span> tarefas aprovadas esta semana
+          </div>
+        </div>
 
         <div class="card">
           <div class="card-header">Resumo da semana</div>
@@ -1069,9 +1079,12 @@
     const supabaseBannerText = document.getElementById('supabaseBannerText');
 
     const childNameEl = document.getElementById('childName');
-    const childWeekPointsEl = document.getElementById('childWeekPoints');
-    const weekProgressBarEl = document.getElementById('weekProgressBar');
+    const childTodayPointsEl = document.getElementById('childTodayPoints');
+    const todayProgressBarEl = document.getElementById('todayProgressBar');
     const tasksDoneCountEl = document.getElementById('tasksDoneCount');
+    const weekProgressBarEl = document.getElementById('weekProgressBar');
+    const weekTasksDoneEl = document.getElementById('weekTasksDone');
+    const weekTasksTotalEl = document.getElementById('weekTasksTotal');
     const tasksTotalCountEl = document.getElementById('tasksTotalCount');
     const todayTasksListEl = document.getElementById('todayTasksList');
     const allTasksListEl = document.getElementById('allTasksList');
@@ -1118,14 +1131,13 @@
     }
     function getWeekRange() {
       const d = new Date();
-      const day = d.getDay();
-      const diffToMonday = (day + 6) % 7;
-      const monday = new Date(d);
-      monday.setDate(d.getDate() - diffToMonday);
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
+      const day = d.getDay(); // 0=Dom, 6=Sáb
+      const sunday = new Date(d);
+      sunday.setDate(d.getDate() - day);
+      const saturday = new Date(sunday);
+      saturday.setDate(sunday.getDate() + 6);
       const fmt = (dt) => dt.toISOString().slice(0, 10);
-      return { start: fmt(monday), end: fmt(sunday) };
+      return { start: fmt(sunday), end: fmt(saturday) };
     }
 
     function ensureInstancesForToday() {
@@ -1177,14 +1189,28 @@
         return sum + (task ? task.points : 0);
       }, 0);
 
-      childWeekPointsEl.textContent = weekApprovedPoints;
+      // pontos aprovados hoje (para header da criança)
+      const todayApprovedPoints = doneInstances.reduce((sum, inst) => {
+        const task = state.tasks.find((t) => t.id === inst.taskId);
+        return sum + (task ? task.points : 0);
+      }, 0);
+      childTodayPointsEl.textContent = todayApprovedPoints;
+
+      // barra de progresso de hoje
       tasksTotalCountEl.textContent = todayInstances.length;
       tasksDoneCountEl.textContent = doneInstances.length;
-
-      const pct = todayInstances.length
+      const todayPct = todayInstances.length
         ? Math.round((doneInstances.length / todayInstances.length) * 100)
         : 0;
-      weekProgressBarEl.style.width = pct + '%';
+      todayProgressBarEl.style.width = todayPct + '%';
+
+      // barra de progresso da semana (aba Semana)
+      const weekDone = weekApproved.length;
+      const weekTotal = weekInstances.length;
+      const weekPct = weekTotal ? Math.round((weekDone / weekTotal) * 100) : 0;
+      weekTasksDoneEl.textContent = weekDone;
+      weekTasksTotalEl.textContent = weekTotal;
+      weekProgressBarEl.style.width = weekPct + '%';
 
       weekApprovedCountEl.textContent = weekApproved.length;
       weekApprovedPointsEl.textContent = weekApprovedPoints + ' pts';
