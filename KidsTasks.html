@@ -512,6 +512,13 @@
                 <option value="weekly">Semanal</option>
               </select>
             </label>
+            <label>
+              Tipo de recompensa
+              <select id="newTaskRewardType">
+                <option value="money">💰 Dinheiro — converte pontos em R$</option>
+                <option value="goal">🏆 Meta — acumula pontos para conquistas</option>
+              </select>
+            </label>
             <button type="submit" class="primary-btn">Adicionar tarefa</button>
           </form>
         </div>
@@ -539,6 +546,14 @@
           <div class="week-summary-row">
             <div>Total em pontos:</div>
             <div id="weekApprovedPoints">0 pts</div>
+          </div>
+          <div class="week-summary-row" style="color:#22c55e;font-weight:600">
+            <div>💰 A receber (dinheiro):</div>
+            <div id="weekMoneyTotal">R$ 0,00</div>
+          </div>
+          <div class="week-summary-row" style="color:#f97316">
+            <div>🏆 Pts de metas acumulados:</div>
+            <div id="weekGoalPoints">0 pts</div>
           </div>
           <div class="week-summary-row">
             <div>Status:</div>
@@ -603,6 +618,22 @@
 
             <div id="familyConfigStatus" class="config-status"></div>
           </div>
+        </div>
+
+        <div class="card parent-only">
+          <div class="card-header">Conversão de pontos</div>
+          <p style="font-size:0.8rem;color:#9ca3af;margin-bottom:0.5rem">
+            Define quanto vale cada ponto em dinheiro para tarefas do tipo 💰 Dinheiro.
+          </p>
+          <label>
+            Valor por ponto (R$)
+            <input id="settingPointValue" type="number" min="0.01" step="0.01"
+              placeholder="Ex: 0.10" style="max-width:120px" />
+          </label>
+          <p id="settingPointValuePreview" class="task-meta" style="margin-top:0.25rem"></p>
+          <button id="settingPointValueSaveBtn" type="button" class="secondary-btn" style="margin-top:0.5rem">
+            Salvar taxa de conversão
+          </button>
         </div>
 
         <div class="card parent-only">
@@ -1000,10 +1031,11 @@
       familyName: '',
       childNameRemote: '',
       childrenList: [],
+      pointValueBRL: 0.10,
       tasks: [
-        { id: 't1', title: 'Arrumar a cama', points: 5, frequency: 'daily' },
-        { id: 't2', title: 'Guardar os brinquedos', points: 5, frequency: 'daily' },
-        { id: 't3', title: 'Ajudar a pôr a mesa', points: 10, frequency: 'daily' },
+        { id: 't1', title: 'Arrumar a cama', points: 5, frequency: 'daily', rewardType: 'money' },
+        { id: 't2', title: 'Guardar os brinquedos', points: 5, frequency: 'daily', rewardType: 'money' },
+        { id: 't3', title: 'Ajudar a pôr a mesa', points: 10, frequency: 'daily', rewardType: 'money' },
       ],
       instances: [],
     };
@@ -1098,6 +1130,12 @@
     const newTaskTitleInput = document.getElementById('newTaskTitle');
     const newTaskPointsInput = document.getElementById('newTaskPoints');
     const newTaskFrequencySelect = document.getElementById('newTaskFrequency');
+    const newTaskRewardTypeSelect = document.getElementById('newTaskRewardType');
+    const weekMoneyTotalEl = document.getElementById('weekMoneyTotal');
+    const weekGoalPointsEl = document.getElementById('weekGoalPoints');
+    const settingPointValueInput = document.getElementById('settingPointValue');
+    const settingPointValuePreview = document.getElementById('settingPointValuePreview');
+    const settingPointValueSaveBtn = document.getElementById('settingPointValueSaveBtn');
 
     const settingShowPointsInput = document.getElementById('settingShowPoints');
     const settingMoneyForParentsInput = document.getElementById('settingMoneyForParents');
@@ -1216,6 +1254,20 @@
 
       weekApprovedCountEl.textContent = weekApproved.length;
       weekApprovedPointsEl.textContent = weekApprovedPoints + ' pts';
+
+      // R$ a receber (tarefas tipo money) e pontos de metas (tipo goal)
+      const rate = parseFloat(state.pointValueBRL) || 0.10;
+      let moneyPts = 0, goalPts = 0;
+      weekApproved.forEach(inst => {
+        const task = state.tasks.find(t => t.id === inst.taskId);
+        if (!task) return;
+        if ((task.rewardType || 'money') === 'goal') goalPts += task.points;
+        else moneyPts += task.points;
+      });
+      const brl = (moneyPts * rate).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      weekMoneyTotalEl.textContent = brl;
+      weekGoalPointsEl.textContent = goalPts + ' pts';
+
       weekPaymentStatusEl.textContent = state.weekPaid ? 'Pago' : 'A pagar';
 
       if (state.weekPaid) {
@@ -1293,8 +1345,9 @@
 
         const meta = document.createElement('div');
         meta.className = 'task-meta';
-        meta.textContent =
-          'Frequência: ' + (task.frequency === 'daily' ? 'Diária' : 'Semanal');
+        const freqLabel = task.frequency === 'daily' ? 'Diária' : 'Semanal';
+        const typeLabel = (task.rewardType || 'money') === 'goal' ? '🏆 Meta' : '💰 Dinheiro';
+        meta.textContent = freqLabel + ' · ' + typeLabel;
 
         left.appendChild(title);
         left.appendChild(meta);
@@ -1395,6 +1448,11 @@
         settingParentPinStatus.textContent =
           'PIN não configurado ou desativado neste dispositivo.';
       }
+
+      const rate = parseFloat(state.pointValueBRL) || 0.10;
+      settingPointValueInput.value = rate;
+      settingPointValuePreview.textContent =
+        `10 pts = ${(10 * rate).toLocaleString('pt-BR', { style:'currency', currency:'BRL' })}`;
 
       familyNameInput.value = state.familyName || '';
       childNameInput.value = state.childNameRemote || state.child.name;
@@ -1704,14 +1762,19 @@
           updateSupabaseUI();
           return;
         }
+        const prevTasks = state.tasks;
         state.tasks = data
           .filter((row) => !state.childId || !row.child_id || row.child_id === state.childId)
-          .map((row, idx) => ({
-            id: row.id || `tremote-${idx}`,
-            title: row.title || 'Tarefa',
-            points: typeof row.points === 'number' ? row.points : 5,
-            frequency: row.frequency || 'daily',
-          }));
+          .map((row, idx) => {
+            const prev = prevTasks.find(t => t.id === row.id);
+            return {
+              id: row.id || `tremote-${idx}`,
+              title: row.title || 'Tarefa',
+              points: typeof row.points === 'number' ? row.points : 5,
+              frequency: row.frequency || 'daily',
+              rewardType: prev?.rewardType || 'money',
+            };
+          });
         state.instances = state.instances || [];
         saveState();
         ensureInstancesForToday();
@@ -1860,6 +1923,7 @@
       const title = newTaskTitleInput.value.trim();
       const points = parseInt(newTaskPointsInput.value, 10) || 0;
       const freq = newTaskFrequencySelect.value;
+      const rewardType = newTaskRewardTypeSelect.value;
       if (!title || points <= 0) return;
 
       let newTask = null;
@@ -1888,6 +1952,7 @@
               title: data.title,
               points: data.points,
               frequency: data.frequency,
+              rewardType,
             };
             supabaseStatus = 'connected';
             updateSupabaseUI();
@@ -1902,7 +1967,7 @@
 
       if (!newTask) {
         const id = 't' + (state.tasks.length + 1);
-        newTask = { id, title, points, frequency: freq };
+        newTask = { id, title, points, frequency: freq, rewardType };
       }
       state.tasks.push(newTask);
       saveState();
@@ -1922,6 +1987,23 @@
     settingMoneyForParentsInput.addEventListener('change', () => {
       state.moneyOnlyForParents = settingMoneyForParentsInput.checked;
       saveState();
+    });
+
+    settingPointValueInput.addEventListener('input', () => {
+      const v = parseFloat(settingPointValueInput.value) || 0;
+      settingPointValuePreview.textContent = v > 0
+        ? `10 pts = ${(10 * v).toLocaleString('pt-BR', { style:'currency', currency:'BRL' })}`
+        : '';
+    });
+
+    settingPointValueSaveBtn.addEventListener('click', () => {
+      const v = parseFloat(settingPointValueInput.value);
+      if (!v || v <= 0) { alert('Digite um valor válido maior que zero.'); return; }
+      state.pointValueBRL = v;
+      saveState();
+      updateSummary();
+      settingPointValuePreview.textContent =
+        `Salvo! 10 pts = ${(10 * v).toLocaleString('pt-BR', { style:'currency', currency:'BRL' })}`;
     });
 
     settingParentPinSaveBtn.addEventListener('click', () => {
