@@ -13,7 +13,6 @@
   <meta name="theme-color" content="#2563eb" />
   <link rel="manifest" href="./manifest.json" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -818,20 +817,16 @@
       document.getElementById('pixModal').classList.remove('hidden');
       _pixCode = pixEmv(PIX_KEY, PIX_NAME, PIX_CITY, '');
       const container = document.getElementById('pixQrContainer');
-      container.innerHTML = '';
-      try {
-        new QRCode(container, {
-          text: _pixCode,
-          width: 200,
-          height: 200,
-          colorDark: '#000000',
-          colorLight: '#ffffff',
-          correctLevel: QRCode.CorrectLevel.M
-        });
-      } catch(e) {
-        console.error('[PIX] QR error:', e);
-        container.innerHTML = '<p style="color:#9ca3af;font-size:0.8rem">Copie o código abaixo para pagar.</p>';
-      }
+      const qrUrl = 'https://chart.googleapis.com/chart?chs=200x200&cht=qr&choe=UTF-8&chl='
+        + encodeURIComponent(_pixCode);
+      container.innerHTML = `
+        <img src="${qrUrl}" width="200" height="200"
+          style="border-radius:8px;background:#fff;padding:6px;display:block;margin:0 auto"
+          alt="QR Code PIX"
+          onerror="this.style.display='none';document.getElementById('pixQrFallback').style.display='block'" />
+        <p id="pixQrFallback" style="display:none;color:#9ca3af;font-size:0.8rem;text-align:center">
+          Copie o código abaixo para pagar.
+        </p>`;
     }
     function closePixModal() { document.getElementById('pixModal').classList.add('hidden'); }
     function copyPixCode() {
