@@ -798,6 +798,7 @@
     // Gerador EMV PIX — Banco Central
     function pixEmv(key, name, city, amount) {
       const f = (id, val) => { const v = String(val); return id + String(v.length).padStart(2,'0') + v; };
+      const mai = f('26', f('00','BR.GOV.BCB.PIX') + f('01', key));
       const adf = f('62', f('05','***'));
       let emv = f('00','01') + mai + f('52','0000') + f('53','986') +
         (amount && parseFloat(amount) > 0 ? f('54', parseFloat(amount).toFixed(2)) : '') +
