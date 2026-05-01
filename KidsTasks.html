@@ -557,11 +557,11 @@
 
         <div class="card parent-only">
           <div class="card-header">Família e crianças</div>
-          <p style="font-size:0.8rem;color:#e5e7eb;margin-bottom:0.25rem;">
-            Fluxo mais intuitivo: primeiro crie a família uma única vez;
-            depois adicione uma ou mais crianças a essa família.
+          <p style="font-size:0.8rem;color:#9ca3af;margin-bottom:0.5rem;">
+            <strong style="color:#e5e7eb">Primeiro uso:</strong> crie a família e adicione as crianças abaixo.<br/>
+            <strong style="color:#e5e7eb">Segundo dispositivo:</strong> configure o Supabase (☁️) e clique em <em>Buscar família</em>.
           </p>
-          <form id="familyForm" class="form-vertical">
+          <div class="form-vertical">
             <label>
               Nome da família
               <input id="familyNameInput" type="text" placeholder="Ex. Família Silva" />
@@ -577,23 +577,14 @@
             <div class="card" style="padding:0.5rem;margin-bottom:0;">
               <div class="card-header" style="margin-bottom:0.35rem;">Crianças da família</div>
               <div id="childrenList" class="task-list"></div>
-              <button id="refreshChildrenBtn" type="button" class="secondary-btn" style="margin-top:0.5rem;">
-                Atualizar lista
-              </button>
+              <div style="display:flex;gap:0.5rem;margin-top:0.5rem;flex-wrap:wrap">
+                <button id="loadFamilyBtn" type="button" class="primary-btn">🔍 Buscar família</button>
+                <button id="refreshChildrenBtn" type="button" class="secondary-btn">Atualizar lista</button>
+              </div>
             </div>
 
-            <label>
-              ID da família (UUID)
-              <input id="familyIdInput" type="text" />
-            </label>
-            <label>
-              ID da criança (UUID)
-              <input id="childIdInput" type="text" />
-            </label>
-
-            <button type="submit" class="secondary-btn">Salvar/editar IDs locais</button>
             <div id="familyConfigStatus" class="config-status"></div>
-          </form>
+          </div>
         </div>
 
         <div class="card parent-only">
@@ -1048,9 +1039,7 @@
     const settingParentPinSaveBtn = document.getElementById('settingParentPinSaveBtn');
     const settingParentPinStatus = document.getElementById('settingParentPinStatus');
 
-    const familyForm = document.getElementById('familyForm');
-    const familyIdInput = document.getElementById('familyIdInput');
-    const childIdInput = document.getElementById('childIdInput');
+    const loadFamilyBtn = document.getElementById('loadFamilyBtn');
     const familyNameInput = document.getElementById('familyNameInput');
     const childNameInput = document.getElementById('childNameInput');
     const familyCreateBtn = document.getElementById('familyCreateBtn');
@@ -1325,8 +1314,6 @@
           'PIN não configurado ou desativado neste dispositivo.';
       }
 
-      familyIdInput.value = state.familyId || '';
-      childIdInput.value = state.childId || '';
       familyNameInput.value = state.familyName || '';
       childNameInput.value = state.childNameRemote || state.child.name;
 
@@ -1889,30 +1876,46 @@
       renderSettings();
     });
 
-    familyForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      state.familyId = familyIdInput.value.trim();
-      state.childId = childIdInput.value.trim();
-      state.familyName = familyNameInput.value.trim();
-      state.childNameRemote = childNameInput.value.trim();
-      if (state.childNameRemote) {
-        state.child.name = state.childNameRemote;
-      }
-      saveState();
-      renderSettings();
-      updateSummary();
-      if (supabaseClient && state.familyId) {
-        loadChildrenFromSupabase();
-        loadTasksFromSupabase();
-        loadTaskInstancesFromSupabase();
-      }
-    });
-
     familyCreateBtn.addEventListener('click', async () => {
       await createFamilyOnly();
     });
     childCreateBtn.addEventListener('click', async () => {
       await createChildOnly();
+    });
+
+    loadFamilyBtn.addEventListener('click', async () => {
+      if (!supabaseClient) {
+        alert('Configure o Supabase (☁️) antes de buscar a família.');
+        return;
+      }
+      loadFamilyBtn.disabled = true;
+      loadFamilyBtn.textContent = 'Buscando...';
+      try {
+        const { data, error } = await supabaseClient
+          .from('families')
+          .select('id, name')
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .single();
+        if (error || !data) {
+          familyConfigStatus.textContent = 'Nenhuma família encontrada no Supabase. Crie uma família primeiro.';
+          return;
+        }
+        state.familyId = data.id;
+        state.familyName = data.name;
+        saveState();
+        familyConfigStatus.textContent = `Família "${data.name}" carregada com sucesso.`;
+        renderSettings();
+        await loadChildrenFromSupabase();
+        await loadTasksFromSupabase();
+        await loadTaskInstancesFromSupabase();
+      } catch (err) {
+        console.error('Erro ao buscar família', err);
+        familyConfigStatus.textContent = 'Erro ao buscar família: ' + (err?.message || 'verifique o Supabase.');
+      } finally {
+        loadFamilyBtn.disabled = false;
+        loadFamilyBtn.textContent = '🔍 Buscar família';
+      }
     });
 
     supabaseModalCloseBtn.addEventListener('click', closeSupabaseModal);
