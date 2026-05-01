@@ -1760,7 +1760,8 @@
           total_points: totalPoints,
           paid_at: new Date().toISOString(),
         };
-        const { error } = await supabaseClient.from('weekly_payments').upsert(payload);
+        const { error } = await supabaseClient.from('weekly_payments').upsert(payload,
+          { onConflict: 'family_id,child_id,week_start_date,week_end_date' });
         if (error) throw error;
         state.weekPaid = true;
         saveState();
