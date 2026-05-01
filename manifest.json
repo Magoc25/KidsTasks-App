@@ -1,0 +1,28 @@
+{
+  "name": "KidsTasks — Tarefas e Mesada",
+  "short_name": "KidsTasks",
+  "description": "App de tarefas e mesada para crianças: gerencie tarefas diárias, aprove conclusões e calcule a recompensa semanal.",
+  "start_url": "./KidsTasks.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#2563eb",
+  "lang": "pt-BR",
+  "categories": ["productivity", "utilities", "education"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
