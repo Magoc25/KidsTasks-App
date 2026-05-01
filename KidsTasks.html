@@ -550,6 +550,12 @@
           </button>
           <div id="weekPaymentInfo" class="task-meta" style="margin-top:0.25rem;"></div>
         </div>
+
+        <div class="app-footer" style="margin-top:1rem">
+          <button class="footer-btn" onclick="openPixModal()" title="Apoiar o projeto via PIX">☕ Apoiar</button>
+          <button class="footer-btn" onclick="openReviewsModal('list')" title="Ver avaliações dos usuários">⭐ Avaliações</button>
+          <span id="appVersion">© MGC · v1.0.0</span>
+        </div>
       </section>
 
       <section id="view-settings" class="view">
@@ -626,11 +632,6 @@
         </div>
       </section>
 
-      <div class="app-footer">
-        <button class="footer-btn" onclick="openPixModal()" title="Apoiar o projeto via PIX">☕ Apoiar</button>
-        <button class="footer-btn" onclick="openReviewsModal()" title="Ver avaliações dos usuários">⭐ Avaliações</button>
-        <span id="appVersion">© MGC · v1.0.0</span>
-      </div>
     </main>
 
     <nav class="app-nav">
@@ -686,28 +687,18 @@
       <p style="font-size:0.85rem;color:#9ca3af;margin-bottom:1rem">
         O KidsTasks é gratuito. Se foi útil para sua família, considere apoiar via PIX.
       </p>
-      <div style="text-align:center;margin-bottom:1rem">
+      <div style="text-align:center;margin-bottom:0.75rem">
         <canvas id="pixQrCanvas"></canvas>
       </div>
-      <div style="margin-bottom:0.75rem">
-        <label style="font-size:0.8rem;color:#9ca3af">Código Copia e Cola:</label>
-        <div style="display:flex;gap:0.5rem;margin-top:0.25rem">
-          <input id="pixCopiaInput" readonly
-            style="flex:1;font-size:0.7rem;padding:0.4rem;border-radius:6px;
-                   background:#020617;border:1px solid rgba(148,163,184,0.3);
-                   color:#e5e7eb;overflow:hidden;text-overflow:ellipsis" />
-          <button type="button" onclick="copyPixCode()" class="secondary-btn" style="flex-shrink:0;white-space:nowrap">Copiar</button>
-        </div>
-      </div>
-      <p style="font-size:0.78rem;color:#6b7280;text-align:center">
-        Chave PIX: 4c6086a2-4bb8-474b-a4cf-ced8c8d82189 · MGC Dev
-      </p>
-      <hr style="border-color:rgba(148,163,184,0.15);margin:1rem 0" />
-      <div style="text-align:center">
-        <button type="button" onclick="closePixModal();openReviewsModal()" class="primary-btn">
-          ⭐ Deixar avaliação
+      <div style="text-align:center;margin-bottom:1rem">
+        <button type="button" id="pixCopyBtn" onclick="copyPixCode()" class="secondary-btn">
+          Copiar código PIX
         </button>
       </div>
+      <hr style="border-color:rgba(148,163,184,0.15);margin:0.75rem 0" />
+      <button type="button" onclick="closePixModal();openReviewsModal('form')" class="primary-btn" style="width:100%">
+        ✅ Já fiz o PIX — quero avaliar
+      </button>
     </div>
   </div>
 
@@ -719,9 +710,20 @@
         <div class="modal-title">⭐ Avaliações</div>
         <button class="modal-close-btn" type="button" onclick="closeReviewsModal()">✕</button>
       </div>
-      <div id="reviewForm">
+
+      <!-- Modo lista (padrão ao clicar em ⭐ Avaliações) -->
+      <div id="reviewListMode">
+        <div id="reviewsList" style="max-height:260px;overflow-y:auto;margin-bottom:0.75rem"></div>
+        <hr style="border-color:rgba(148,163,184,0.15);margin:0.5rem 0 0.75rem" />
+        <button type="button" onclick="closeReviewsModal();openPixModal()" class="primary-btn" style="width:100%">
+          ☕ Apoiar via PIX para avaliar
+        </button>
+      </div>
+
+      <!-- Modo formulário (após "Já fiz o PIX") -->
+      <div id="reviewFormMode" class="hidden">
         <p style="font-size:0.82rem;color:#9ca3af;margin-bottom:0.75rem">
-          Deixe sua avaliação! Ela fica visível para todos os usuários do KidsTasks.
+          Obrigado pelo apoio! Deixe sua avaliação — ela fica visível para todos os usuários.
         </p>
         <div style="text-align:center;margin-bottom:0.5rem">
           <span class="star-btn" onclick="setReviewStar(1)" style="font-size:1.8rem;cursor:pointer;color:#4b5563">★</span>
@@ -744,23 +746,22 @@
                      background:#020617;border:1px solid rgba(148,163,184,0.3);color:#e5e7eb;font-size:0.85rem"></textarea>
           </label>
           <label style="flex-direction:row;align-items:center;gap:0.5rem;font-size:0.82rem">
-            <input type="checkbox" id="reviewDonatedCheck" />
+            <input type="checkbox" id="reviewDonatedCheck" checked />
             Já apoiei via PIX ☕
           </label>
         </div>
         <button type="button" onclick="submitReview()" class="primary-btn" style="width:100%">Enviar avaliação</button>
       </div>
+
+      <!-- Agradecimento (após envio) -->
       <div id="reviewThankYou" class="hidden" style="text-align:center;padding:1rem 0">
         <p style="font-size:1.5rem;margin-bottom:0.5rem">🎉</p>
         <p style="font-weight:600;margin-bottom:0.25rem">Obrigado pela avaliação!</p>
         <p style="font-size:0.82rem;color:#9ca3af;margin-bottom:1rem">Sua opinião ajuda outras famílias a conhecer o app.</p>
-        <button type="button" class="secondary-btn"
-          onclick="document.getElementById('reviewThankYou').classList.add('hidden');document.getElementById('reviewForm').classList.remove('hidden')">
-          Avaliar novamente
+        <button type="button" onclick="openReviewsModal('list')" class="secondary-btn">
+          Ver todas as avaliações
         </button>
       </div>
-      <hr style="border-color:rgba(148,163,184,0.15);margin:0.75rem 0" />
-      <div id="reviewsList" style="max-height:220px;overflow-y:auto"></div>
     </div>
   </div>
 
@@ -806,23 +807,30 @@
       return emv + crc16(emv);
     }
 
+    let _pixCode = '';
+
     function openPixModal() {
       document.getElementById('pixModal').classList.remove('hidden');
-      const code = pixEmv(PIX_KEY, PIX_NAME, PIX_CITY, '');
-      document.getElementById('pixCopiaInput').value = code;
+      _pixCode = pixEmv(PIX_KEY, PIX_NAME, PIX_CITY, '');
       if (typeof QRCode !== 'undefined') {
-        QRCode.toCanvas(document.getElementById('pixQrCanvas'), code,
+        QRCode.toCanvas(document.getElementById('pixQrCanvas'), _pixCode,
           { width: 200, margin: 2 }, err => { if (err) console.error('QR', err); });
       }
     }
     function closePixModal() { document.getElementById('pixModal').classList.add('hidden'); }
     function copyPixCode() {
-      const input = document.getElementById('pixCopiaInput');
-      const btn   = input.nextElementSibling;
-      navigator.clipboard.writeText(input.value).then(() => {
-        btn.textContent = 'Copiado!';
-        setTimeout(() => { btn.textContent = 'Copiar'; }, 2000);
-      }).catch(() => { input.select(); document.execCommand('copy'); });
+      const btn = document.getElementById('pixCopyBtn');
+      navigator.clipboard.writeText(_pixCode).then(() => {
+        btn.textContent = '✅ Copiado!';
+        setTimeout(() => { btn.textContent = 'Copiar código PIX'; }, 2000);
+      }).catch(() => {
+        const tmp = document.createElement('textarea');
+        tmp.value = _pixCode;
+        document.body.appendChild(tmp);
+        tmp.select();
+        document.execCommand('copy');
+        document.body.removeChild(tmp);
+      });
     }
 
     // Reviews
@@ -880,10 +888,21 @@
       }).join('');
     }
 
-    async function openReviewsModal() {
+    async function openReviewsModal(mode = 'list') {
       document.getElementById('reviewsModal').classList.remove('hidden');
-      await loadSharedReviews();
-      renderReviewsList();
+      document.getElementById('reviewListMode').classList.toggle('hidden', mode !== 'list');
+      document.getElementById('reviewFormMode').classList.toggle('hidden', mode !== 'form');
+      document.getElementById('reviewThankYou').classList.add('hidden');
+      if (mode === 'list') {
+        await loadSharedReviews();
+        renderReviewsList();
+      }
+      if (mode === 'form') {
+        setReviewStar(0);
+        document.getElementById('reviewNameInput').value = '';
+        document.getElementById('reviewCommentInput').value = '';
+        document.getElementById('reviewDonatedCheck').checked = true;
+      }
     }
     function closeReviewsModal() { document.getElementById('reviewsModal').classList.add('hidden'); }
 
@@ -911,11 +930,7 @@
       try { localStorage.setItem('ktm_reviews', JSON.stringify(localReviews)); } catch(e) {}
       renderReviewsList();
       await pushReviewToCloud(review);
-      document.getElementById('reviewNameInput').value = '';
-      document.getElementById('reviewCommentInput').value = '';
-      document.getElementById('reviewDonatedCheck').checked = false;
-      setReviewStar(0);
-      document.getElementById('reviewForm').classList.add('hidden');
+      document.getElementById('reviewFormMode').classList.add('hidden');
       document.getElementById('reviewThankYou').classList.remove('hidden');
     }
 
