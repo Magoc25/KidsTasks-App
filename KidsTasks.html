@@ -1204,12 +1204,14 @@
         : 0;
       todayProgressBarEl.style.width = todayPct + '%';
 
-      // barra de progresso da semana (aba Semana)
+      // barra de progresso da semana — total esperado: diárias×7 + semanais×1
       const weekDone = weekApproved.length;
-      const weekTotal = weekInstances.length;
-      const weekPct = weekTotal ? Math.round((weekDone / weekTotal) * 100) : 0;
+      const dailyCount = state.tasks.filter(t => t.frequency === 'daily').length;
+      const weeklyCount = state.tasks.filter(t => t.frequency === 'weekly').length;
+      const weekTotalExpected = (dailyCount * 7) + weeklyCount;
+      const weekPct = weekTotalExpected ? Math.round((weekDone / weekTotalExpected) * 100) : 0;
       weekTasksDoneEl.textContent = weekDone;
-      weekTasksTotalEl.textContent = weekTotal;
+      weekTasksTotalEl.textContent = weekTotalExpected;
       weekProgressBarEl.style.width = weekPct + '%';
 
       weekApprovedCountEl.textContent = weekApproved.length;
