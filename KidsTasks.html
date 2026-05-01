@@ -876,14 +876,19 @@
     }
 
     async function pushReviewToCloud(review) {
-      if (!revClient) return;
+      if (!revClient) return { ok: false, reason: 'revClient nulo — biblioteca Supabase não carregou' };
       try {
-        await revClient.from('app_reviews').insert({
+        const { error } = await revClient.from('app_reviews').insert({
           id: review.id, project_id: PROJECT_ID, name: review.name,
           comment: review.comment, stars: review.stars,
           donated: review.donated, date: review.date, ts: review.ts
         });
-      } catch(e) { console.error('[Reviews] push', e); }
+        if (error) return { ok: false, reason: error.message };
+        return { ok: true };
+      } catch(e) {
+        console.error('[Reviews] push', e);
+        return { ok: false, reason: e.message };
+      }
     }
 
     function renderReviewsList() {
@@ -956,8 +961,14 @@
       renderReviewsList();
       const btnEnviar = document.querySelector('#reviewFormMode .primary-btn');
       if (btnEnviar) { btnEnviar.disabled = true; btnEnviar.textContent = 'Enviando...'; }
-      await pushReviewToCloud(review);
+      const result = await pushReviewToCloud(review);
       document.getElementById('reviewFormMode').classList.add('hidden');
+      const tyMsg = document.querySelector('#reviewThankYou p:nth-child(3)');
+      if (tyMsg) {
+        tyMsg.textContent = result?.ok
+          ? '✅ Avaliação sincronizada! Outros usuários já podem ver.'
+          : `⚠️ Salvo só neste dispositivo. Motivo: ${result?.reason || 'desconhecido'}`;
+      }
       document.getElementById('reviewThankYou').classList.remove('hidden');
       if (btnEnviar) { btnEnviar.disabled = false; btnEnviar.textContent = 'Enviar avaliação'; }
     }
