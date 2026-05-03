@@ -149,6 +149,10 @@
               <div class="tile"><div class="k">Estrelas aprovadas</div><div class="v"><span class="starIcon" aria-hidden="true"></span><span id="stars">0</span></div></div>
               <div class="tile"><div class="k">Tarefas aprovadas</div><div class="v">✅ <span id="approved">0</span></div></div>
             </div>
+            <div id="childMoneyTile" class="tile hidden" style="margin-top:12px;background:var(--tint-yellow)">
+              <div class="k">💰 A receber esta semana</div>
+              <div class="v" style="font-size:20px"><span id="childMoneyAmount">R$ 0,00</span></div>
+            </div>
             <div class="progress" aria-label="Progresso de hoje"><div id="bar"></div></div>
             <div class="progress-row"><span id="progressText">0 de 0</span><span id="pendingText">0 aguardando</span></div>
             <p style="margin:16px 0 0;color:var(--slate);font-size:14px;line-height:1.5">Ao marcar uma tarefa, ela fica <strong>aguardando</strong> aprovação.</p>
@@ -988,6 +992,13 @@ function renderChild(){
   const sum=computeSummary();
   $('#stars').textContent=sum.weekApprovedStars;
   $('#approved').textContent=sum.weekApprovedCount;
+  const moneyTile=$('#childMoneyTile');
+  if(moneyTile){
+    moneyTile.classList.toggle('hidden', !state.showMoneyToChild);
+    if(state.showMoneyToChild){
+      $('#childMoneyAmount').textContent=sum.moneyBRL.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+    }
+  }
   const total=sum.todayTotal||1;
   const pct=Math.round((sum.todayDoneLike/total)*100);
   $('#bar').style.width=Math.min(100,pct)+'%';
