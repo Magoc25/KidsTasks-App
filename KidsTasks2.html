@@ -2065,6 +2065,33 @@ function bindEvents(){
     renderAll();
   });
 
+  // edit goal modal
+  $('#editGoalCancel').addEventListener('click', closeEditGoal);
+  $('#editGoalOverlay').addEventListener('click', (e)=>{ if(e.target.id==='editGoalOverlay') closeEditGoal(); });
+  $('#editGoalForm').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const id=$('#editGoalId').value;
+    const goal=(state.goals||[]).find(g=>String(g.id)===String(id));
+    if(!goal) return;
+    const newTitle=$('#editGoalTitle').value.trim();
+    if(!newTitle) return toast('Digite o nome da meta','error');
+    goal.title=newTitle;
+    goal.icon=$('#editGoalIcon').value||goal.icon||'🎯';
+    goal.targetStars=Math.max(1,parseInt($('#editGoalTarget').value,10)||1);
+    const wasDelivered=goal.delivered;
+    goal.delivered=$('#editGoalDelivered').checked;
+    if(goal.delivered && !wasDelivered) goal.deliveredAt=new Date().toISOString();
+    if(!goal.delivered) goal.deliveredAt=null;
+    saveState();
+    if(supabaseClient && state.familyId && state.childId){
+      const ok=await updateGoalInSupabase(goal);
+      if(!ok) toast('Salvo localmente (falha ao sincronizar)','error');
+    }
+    closeEditGoal();
+    toast('Meta atualizada ✅','ok');
+    renderAll();
+  });
+
   // add goal
   $('#newGoalForm').addEventListener('submit', async (e)=>{
  e.preventDefault();
