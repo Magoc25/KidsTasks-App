@@ -1457,7 +1457,17 @@ function renderParent(){
   $('#supabaseConfigStatus').textContent=(supabaseConfig.url && supabaseConfig.anonKey)?'Configuração salva neste dispositivo.':'Supabase não configurado.';
 }
 
-function showMode(mode){ state.mode=mode; saveState(); $('#childPanel').classList.toggle('hidden', mode!=='child'); $('#parentPanel').classList.toggle('hidden', mode!=='parent'); if(mode==='child') _justEnteredChild=true; }
+function showMode(mode){
+  state.mode=mode; saveState();
+  $('#childPanel').classList.toggle('hidden', mode!=='child');
+  $('#parentPanel').classList.toggle('hidden', mode!=='parent');
+  if(mode==='child'){
+    _justEnteredChild=true;
+    // Retoma o AudioContext durante o evento de clique (exigido pelo Chrome)
+    const ctx=getAudio();
+    if(ctx && ctx.state==='suspended') ctx.resume().catch(()=>{});
+  }
+}
 function openPinModal(){ $('#pinOverlay').classList.add('open'); $('#pinInput').value=''; $('#pinInput').focus(); }
 function closePinModal(){ $('#pinOverlay').classList.remove('open'); }
 function unlockParent(){ if(!state.parentPinEnabled){ showMode('parent'); closePinModal(); renderAll(); return; } const pin=$('#pinInput').value.trim(); if(pin!==String(state.parentPin||'')) return toast('PIN incorreto','error'); showMode('parent'); closePinModal(); renderAll(); }
@@ -1843,6 +1853,8 @@ function init(){
 }
 
 window.addEventListener('load', init);
+// Retoma AudioContext em qualquer interação do usuário
+document.addEventListener('click', ()=>{ if(_audioCtx && _audioCtx.state==='suspended') _audioCtx.resume().catch(()=>{}); }, false);
 </script>
 </body>
 </html>
