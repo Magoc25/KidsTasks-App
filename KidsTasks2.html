@@ -844,7 +844,8 @@ function renderChild(){
 
 function renderGoalsList(){
   const list=$('#goalsList');
-  const goals=state.goals||[];
+  const cid=activeChildId();
+  const goals=goalsForChild(cid);
   const total=state.totalGoalStars||0;
   if(!goals.length){
     list.innerHTML=`<p style="color:var(--slate);font-size:14px;text-align:center;padding:12px 0">Nenhuma meta cadastrada ainda.</p>`;
