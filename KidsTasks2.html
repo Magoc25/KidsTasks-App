@@ -391,8 +391,12 @@
         <div class="bd">
           <div class="card" style="box-shadow:none;background:var(--surface);margin-bottom:12px">
             <div class="bd">
-              <h3 style="margin:0 0 10px;font-size:16px">Família e crianças</h3>
-              <p style="margin:0 0 12px;color:var(--slate);font-size:14px;line-height:1.5">Crie/Busque a família e adicione crianças.</p>
+              <h3 style="margin:0 0 8px;font-size:16px">Família e crianças</h3>
+              <div style="margin-bottom:12px">
+                <h4 style="margin:0 0 8px;font-size:14px;color:var(--slate)">Crianças cadastradas</h4>
+                <div id="childrenList" style="display:flex;flex-direction:column;gap:8px"></div>
+              </div>
+              <p style="margin:0 0 10px;color:var(--slate);font-size:13px;line-height:1.5">Adicione uma nova criança ou crie/busque a família abaixo.</p>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
                 <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Nome da família<input class="input" id="familyNameInput" placeholder="Ex: Família Silva"/></label>
                 <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Nome da criança<input class="input" id="childNameInput" placeholder="Ex: Alice"/></label>
@@ -402,10 +406,6 @@
                 <button class="btn btn-secondary" id="childCreateBtn" type="button">Adicionar criança</button>
                 <button class="btn btn-primary" id="loadFamilyBtn" type="button">🔍 Buscar família</button>
                 <button class="btn btn-secondary" id="refreshChildrenBtn" type="button">Atualizar lista</button>
-              </div>
-              <div style="margin-top:12px">
-                <h4 style="margin:0 0 8px;font-size:14px;color:var(--slate)">Crianças</h4>
-                <div id="childrenList" style="display:flex;flex-direction:column;gap:8px"></div>
               </div>
             </div>
           </div>
@@ -464,10 +464,10 @@
     <div class="modal">
       <div class="mhd"><h3>🔒 Acesso do responsável</h3><p>Digite o PIN para abrir o painel.</p></div>
       <div class="mbd">
+        <input class="input" id="pinInput" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off" style="width:100%;text-align:center;letter-spacing:6px;font-size:20px;margin-bottom:10px" />
         <div style="display:flex;gap:8px">
-          <input class="input" id="pinInput" inputmode="numeric" maxlength="6" placeholder="••••" style="flex:1;text-align:center;letter-spacing:4px" />
-          <button class="btn btn-primary" id="pinUnlock" type="button">Entrar</button>
-          <button class="btn btn-secondary" id="pinClose" type="button">Cancelar</button>
+          <button class="btn btn-primary" id="pinUnlock" type="button" style="flex:1">Entrar</button>
+          <button class="btn btn-secondary" id="pinClose" type="button" style="flex:1">Cancelar</button>
         </div>
         <p style="margin:12px 0 0;color:var(--slate);font-size:14px">PIN inicial: <strong>1234</strong> (altere em Config).</p>
       </div>
@@ -1118,14 +1118,16 @@ async function loadTaskInstancesFromSupabase(){
 }
 
 async function syncInstanceToSupabase(instance){
-  if(!supabaseClient || !state.familyId || !state.childId || !instance) return false;
+  if(!supabaseClient || !state.familyId || !instance) return false;
+  const childId = instance.childId || state.childId;
+  if(!childId) { console.warn('[Sync] childId ausente'); return false; }
+  if(!isUuidLike(String(instance.taskId))){ console.warn('[Sync] taskId não é UUID — tarefa local, ignorando sync'); return false; }
   try{
-    // garante childId local
-    instance.childId = instance.childId || state.childId;
-    const payload={family_id:state.familyId,child_id:state.childId,task_id:instance.taskId,date:instance.date,status:instance.status,approved_stars:(typeof instance.approvedStars==='number')?instance.approvedStars:null,elapsed_seconds:(typeof instance.elapsedSeconds==='number')?instance.elapsedSeconds:null,timer_started_at:instance.timerStartedAt||null};
+    instance.childId = childId;
+    const payload={family_id:state.familyId,child_id:childId,task_id:instance.taskId,date:instance.date,status:instance.status,approved_stars:(typeof instance.approvedStars==='number')?instance.approvedStars:null,elapsed_seconds:(typeof instance.elapsedSeconds==='number')?instance.elapsedSeconds:null,timer_started_at:instance.timerStartedAt||null};
     const {data:existing,error:selErr}=await supabaseClient.from('task_instances')
       .select('id')
-      .eq('family_id',state.familyId).eq('child_id',state.childId)
+      .eq('family_id',state.familyId).eq('child_id',childId)
       .eq('task_id',instance.taskId).eq('date',instance.date).limit(1);
     if(selErr) throw selErr;
     if(existing && existing.length){
@@ -1144,7 +1146,8 @@ async function syncInstanceToSupabase(instance){
     return true;
   }catch(e){
     console.error('[Supabase] syncInstance',e);
-    setCloudStatus('error','Erro ao sincronizar');
+    setCloudStatus('error','Erro ao sincronizar: '+e.message);
+    toast('⚠️ Falha ao sincronizar com Supabase','error');
     return false;
   }
 }
