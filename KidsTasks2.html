@@ -28,7 +28,7 @@
   .btn-secondary-on-dark{padding:0 10px;font-size:13px}
   .avatar{width:36px;height:36px}
   /* Container — mais espaço do header no mobile */
-  .container{padding:8px var(--sp-2) 80px;transform:translateY(0)}
+  .container{padding:16px var(--sp-2) 80px;transform:translateY(0)}
   /* Grid → 1 coluna */
   .grid{grid-template-columns:1fr!important;gap:12px}
   /* KPI → 3 colunas compactas */
@@ -57,9 +57,10 @@
   .modal{border-radius:var(--r-card) var(--r-card) 0 0;max-height:90vh;overflow-y:auto}
   .overlay{align-items:flex-end;padding:0}
   /* Cards de configuração */
-  .card .bd form[style*="grid-template-columns: 1fr 1fr"]{display:flex!important;flex-direction:column!important}
-  /* Botões do header */
-  #btnChild,#btnParent{padding:0 12px;font-size:12px;height:36px}
+  .card .bd [style*="grid-template-columns"]{display:flex!important;flex-direction:column!important}
+  /* Botões do header — ícone apenas no mobile */
+  .btn-txt{display:none}
+  #btnChild,#btnParent{padding:0 10px;font-size:18px;width:42px;height:36px}
   /* Tiles da criança */
   .summary{gap:8px}
   .tile{padding:12px}
@@ -73,8 +74,8 @@
   .task .sub{font-size:11px}
   /* Inputs não ultrapassam a tela */
   .input{max-width:100%;box-sizing:border-box}
-  /* Formulário de config em coluna no mobile */
-  #panelSettings .card .bd [style*="grid-template-columns: 1fr 1fr"]{display:flex!important;flex-direction:column!important}
+  /* Formulário de config em coluna no mobile — selector corrigido (sem espaço após :) */
+  #panelSettings .card .bd [style*="grid-template-columns"]{display:flex!important;flex-direction:column!important}
 }
 @media(max-width:380px){
   .titleblock .subtitle{display:none}
@@ -201,8 +202,8 @@
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
         <button id="cloudBtn" class="cloud-indicator" type="button" title="Supabase não configurado">☁️ <span class="cloud-dot"></span></button>
-        <button class="btn btn-secondary-on-dark" id="btnChild" type="button">👦 Criança</button>
-        <button class="btn btn-secondary-on-dark" id="btnParent" type="button">🔒 Responsável</button>
+        <button class="btn btn-secondary-on-dark" id="btnChild" type="button" title="Modo Criança">👦<span class="btn-txt"> Criança</span></button>
+        <button class="btn btn-secondary-on-dark" id="btnParent" type="button" title="Modo Responsável">🔒<span class="btn-txt"> Responsável</span></button>
       </div>
     </div>
   </header>
