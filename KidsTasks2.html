@@ -21,14 +21,15 @@
 .app{min-height:100vh;background:linear-gradient(180deg,var(--navy) 0,var(--navy) 240px,var(--surface) 240px)}
 /* ── Mobile responsivo ── */
 @media(max-width:640px){
-  /* Header */
+  /* Header — mais espaço abaixo dos botões no mobile */
+  .header{padding-bottom:48px}
   .topbar{gap:8px}
   .titleblock .title{font-size:15px}
   .titleblock .subtitle{font-size:11px}
   .btn-secondary-on-dark{padding:0 10px;font-size:13px}
   .avatar{width:36px;height:36px}
-  /* Container — mais espaço do header no mobile */
-  .container{padding:16px var(--sp-2) 80px;transform:translateY(0)}
+  /* Container */
+  .container{padding:12px var(--sp-2) 80px;transform:translateY(0)}
   /* Grid → 1 coluna */
   .grid{grid-template-columns:1fr!important;gap:12px}
   /* KPI → 3 colunas compactas */
