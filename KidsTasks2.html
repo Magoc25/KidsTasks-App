@@ -180,6 +180,12 @@
 .toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);z-index:99;background:#111827;color:#fff;padding:10px 14px;border-radius:12px;font-size:14px;box-shadow:rgba(0,0,0,.22) 0 12px 26px -14px}
 .starPick button{background:transparent;border:none;font-size:18px;cursor:pointer;line-height:1;padding:0 2px;color:#4b5563}
 .starPick button.on{color:#facc15}
+.hist-card{border:1px solid var(--hairline);border-radius:var(--r-card);padding:14px;margin-bottom:10px;border-left:4px solid var(--warning)}
+.hist-card.paid{border-left-color:var(--success)}
+.hist-badge{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--error);color:#fff;font-size:10px;font-weight:700;margin-left:4px;vertical-align:middle}
+.hist-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
+.hist-stat{text-align:center}.hist-stat .v{font-size:18px;font-weight:700}.hist-stat .k{font-size:11px;color:var(--slate)}
+@media(max-width:640px){.hist-grid{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
@@ -240,6 +246,11 @@
         </aside>
       </div>
 
+      <section class="card hidden" id="childHistoryCard" style="margin-top:16px">
+        <div class="hd"><h2>📅 Minhas semanas</h2><div class="meta">histórico pessoal</div></div>
+        <div class="bd" id="childHistoryContent"></div>
+      </section>
+
       <section class="card hidden" id="childGoalsCard" style="margin-top:16px">
         <div class="hd">
           <h2>🏆 Minhas Conquistas</h2>
@@ -263,6 +274,7 @@
             <button class="pill" data-tab="week" type="button">📅 Semana</button>
             <button class="pill" data-tab="tasks" type="button">🧾 Tarefas</button>
             <button class="pill" data-tab="goals" type="button">🏆 Metas</button>
+            <button class="pill" data-tab="history" type="button" id="historyTabBtn">📋 Histórico<span id="historyBadge" class="hist-badge" style="display:none">0</span></button>
             <button class="pill" data-tab="settings" type="button">⚙️ Config</button>
           </div>
         </div>
@@ -423,6 +435,15 @@
             </div>
           </div>
         </div>
+      <section class="card hidden" id="panelHistory">
+        <div class="hd">
+          <h2>📋 Histórico de semanas</h2>
+          <div class="meta" id="histMeta"></div>
+        </div>
+        <div class="bd">
+          <div id="historyContent" style="max-height:520px;overflow-y:auto"></div>
+        </div>
+      </section>
       </section>
     </section>
   </main>
@@ -1349,6 +1370,7 @@ function renderChild(){
   });
   if(hasRunningTimer) startGlobalTick(); else stopGlobalTick();
   renderChildGoals();
+  renderChildHistory();
 }
 
 function renderChildGoals(){
@@ -1480,6 +1502,7 @@ function renderParent(){
   $('#kAwait').textContent=sum.pendingCount;
   $('#kApproved').textContent=sum.weekApprovedCount;
   $('#kPoints').textContent=sum.weekApprovedStars;
+  updateHistoryBadge();
 
   // approvals
   const tbody=$('#approvalsBody'); tbody.innerHTML='';
@@ -1568,7 +1591,129 @@ function closePinModal(){ $('#pinOverlay').classList.remove('open'); }
 function unlockParent(){ if(!state.parentPinEnabled){ showMode('parent'); closePinModal(); renderAll(); return; } const pin=$('#pinInput').value.trim(); if(pin!==String(state.parentPin||'')) return toast('PIN incorreto','error'); showMode('parent'); closePinModal(); renderAll(); }
 function openCloudModal(){ $('#cloudOverlay').classList.add('open'); $('#supabaseUrlInput').focus(); }
 function closeCloudModal(){ $('#cloudOverlay').classList.remove('open'); }
-function setParentTab(tab){ const panels={approvals:$('#panelApprovals'),week:$('#panelWeek'),tasks:$('#panelTasks'),goals:$('#panelGoals'),settings:$('#panelSettings')}; Object.entries(panels).forEach(([k,el])=>el.classList.toggle('hidden', k!==tab)); $all('[data-tab]').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab)); }
+function setParentTab(tab){
+  const panels={approvals:$('#panelApprovals'),week:$('#panelWeek'),tasks:$('#panelTasks'),goals:$('#panelGoals'),history:$('#panelHistory'),settings:$('#panelSettings')};
+  Object.entries(panels).forEach(([k,el])=>{ if(el) el.classList.toggle('hidden', k!==tab); });
+  $all('[data-tab]').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  if(tab==='history') renderHistory();
+}
+
+// ── Histórico de semanas ──
+function fmtWeekLabel(start, end){
+  const opts={day:'2-digit',month:'short'};
+  const s=new Date(start+'T12:00:00'), e=new Date(end+'T12:00:00');
+  return `${s.toLocaleDateString('pt-BR',opts)} – ${e.toLocaleDateString('pt-BR',opts)}`;
+}
+
+async function loadWeekHistoryFromSupabase(){
+  if(!supabaseClient||!state.familyId) return;
+  try{
+    const {data,error}=await supabaseClient.from('weekly_payments')
+      .select('family_id,child_id,week_start_date,week_end_date,total_points,goal_stars,paid_at')
+      .eq('family_id',state.familyId)
+      .order('week_start_date',{ascending:false}).limit(52);
+    if(error||!data) return;
+    if(!state.weekHistory) state.weekHistory=[];
+    const rate=parseFloat(state.pointValueBRL)||0.10;
+    data.forEach(row=>{
+      const histId=`hist_${row.child_id}_${row.week_start_date}`;
+      const existing=state.weekHistory.find(h=>h.id===histId);
+      const child=state.childrenList.find(c=>c.id===row.child_id);
+      const gs=row.goal_stars||0, ts=row.total_points||0;
+      const entry={
+        id:histId, childId:row.child_id, childName:child?.name||'Criança',
+        weekStart:row.week_start_date, weekEnd:row.week_end_date,
+        totalStars:ts, moneyBRL:(ts-gs)*rate, goalStars:gs,
+        tasksApproved:existing?.tasksApproved||0,
+        paid:!!row.paid_at, paidAt:row.paid_at||null
+      };
+      if(existing) Object.assign(existing,entry); else state.weekHistory.unshift(entry);
+    });
+    state.weekHistory.sort((a,b)=>b.weekStart.localeCompare(a.weekStart));
+    saveState();
+  }catch(e){ console.error('[History] load',e); }
+}
+
+function updateHistoryBadge(){
+  const pending=(state.weekHistory||[]).filter(h=>!h.paid).length;
+  const badge=$('#historyBadge'); if(!badge) return;
+  badge.style.display=pending?'inline-flex':'none';
+  badge.textContent=pending;
+}
+
+async function markHistoryPaid(histId){
+  const entry=(state.weekHistory||[]).find(h=>h.id===histId); if(!entry) return;
+  if(!confirm(`Marcar semana de ${entry.childName} (${fmtWeekLabel(entry.weekStart,entry.weekEnd)}) como paga?`)) return;
+  entry.paid=true; entry.paidAt=new Date().toISOString(); saveState();
+  if(supabaseClient&&state.familyId){
+    try{
+      await supabaseClient.from('weekly_payments').update({paid_at:entry.paidAt})
+        .eq('family_id',state.familyId).eq('child_id',entry.childId)
+        .eq('week_start_date',entry.weekStart);
+    }catch(e){ console.error('[History] markPaid',e); }
+  }
+  updateHistoryBadge(); renderHistory(); renderAll();
+}
+
+function renderHistory(){
+  const container=$('#historyContent'); if(!container) return;
+  const history=(state.weekHistory||[]);
+  updateHistoryBadge();
+  const pending=history.filter(h=>!h.paid).length;
+  const meta=$('#histMeta');
+  if(meta) meta.textContent=pending>0?`${pending} semana(s) com pagamento pendente`:`Tudo pago ✅`;
+
+  if(!history.length){
+    container.innerHTML='<p style="color:var(--slate);text-align:center;padding:20px">Nenhuma semana arquivada ainda.<br>O histórico aparece a partir da próxima virada de semana (domingo).</p>';
+    return;
+  }
+  container.innerHTML='';
+  history.forEach(h=>{
+    const div=document.createElement('div');
+    div.className='hist-card'+(h.paid?' paid':'');
+    const paidLabel=h.paid
+      ?`<span class="badge ok">✅ Pago em ${new Date(h.paidAt).toLocaleDateString('pt-BR')}</span>`
+      :`<button type="button" onclick="markHistoryPaid('${h.id}')" class="btn btn-primary" style="height:36px;font-size:13px">💳 Marcar pago</button>`;
+    div.innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+        <div>
+          <div style="font-weight:600;font-size:15px">${esc(h.childName)}</div>
+          <div style="font-size:13px;color:var(--slate)">${fmtWeekLabel(h.weekStart,h.weekEnd)}</div>
+        </div>
+        ${paidLabel}
+      </div>
+      <div class="hist-grid">
+        <div class="hist-stat"><div class="v">⭐ ${h.totalStars}</div><div class="k">Estrelas</div></div>
+        <div class="hist-stat"><div class="v" style="font-size:15px">${h.moneyBRL.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</div><div class="k">Dinheiro</div></div>
+        <div class="hist-stat"><div class="v">🏆 ${h.goalStars}</div><div class="k">Pts metas</div></div>
+        <div class="hist-stat"><div class="v">✅ ${h.tasksApproved||'—'}</div><div class="k">Tarefas</div></div>
+      </div>`;
+    container.appendChild(div);
+  });
+}
+
+function renderChildHistory(){
+  const cid=activeChildId();
+  const card=$('#childHistoryCard'), container=$('#childHistoryContent'); if(!card||!container) return;
+  const history=(state.weekHistory||[]).filter(h=>h.childId===cid).slice(0,8);
+  if(!history.length){ card.classList.add('hidden'); return; }
+  card.classList.remove('hidden');
+  container.innerHTML='';
+  history.forEach(h=>{
+    const div=document.createElement('div');
+    div.style.cssText='padding:10px 0;border-bottom:1px solid rgba(15,15,15,.06)';
+    const paidMark=h.paid?'<span style="color:var(--success);font-size:13px">✅ Pago</span>':'<span style="color:var(--warning);font-size:13px">⏳ Pendente</span>';
+    const money=state.showMoneyToChild?`<span style="color:var(--success);font-size:14px"> · ${h.moneyBRL.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</span>`:'';
+    div.innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <div style="font-size:13px;color:var(--slate)">${fmtWeekLabel(h.weekStart,h.weekEnd)}</div>
+        ${paidMark}
+      </div>
+      <div style="margin-top:4px;font-size:15px;font-weight:600">⭐ ${h.totalStars}${money}${h.goalStars?` · 🏆 ${h.goalStars} pts`:''}
+      </div>`;
+    container.appendChild(div);
+  });
+}
 
 // ── Arquivo de semana anterior (chamado na virada de semana) ──
 async function archiveWeek(prevWeekStart, prevWeekEnd, oldInstances){
@@ -1962,6 +2107,7 @@ function init(){
         await loadTasksFromSupabase().catch(()=>{});
         await loadTaskInstancesFromSupabase().catch(()=>{});
         await loadGoalsFromSupabase().catch(()=>{});
+        await loadWeekHistoryFromSupabase().catch(()=>{});
         ensureInstancesForToday();
         setCloudStatus('connected','Supabase sincronizado');
         renderAll();
