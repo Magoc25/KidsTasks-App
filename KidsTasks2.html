@@ -242,7 +242,7 @@
                   <option value="custom">Dias específicos</option>
                 </select>
               </label>
-              <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Tipo<select class="input" id="fReward"><option value="money">💰 Dinheiro</option><option value="goal">🏆 Meta</option></select></label>
+              <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Tipo<select class="input" id="fReward"><option value="money">💰 Dinheiro</option><option value="goal">🏆 Meta</option><option value="both">💰🏆 Ambos</option></select></label>
               <button class="btn btn-primary" type="submit">+ Adicionar</button>
             </div>
             <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-top:8px">
@@ -441,7 +441,7 @@
             </div>
           </div>
           <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Tipo
-            <select class="input" id="editReward"><option value="money">💰 Dinheiro</option><option value="goal">🏆 Meta</option></select>
+            <select class="input" id="editReward"><option value="money">💰 Dinheiro</option><option value="goal">🏆 Meta</option><option value="both">💰🏆 Ambos</option></select>
           </label>
           <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
             <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--slate);cursor:pointer">
@@ -815,10 +815,13 @@ function computeSummary(){
   const weekApprovedStars=weekApproved.reduce((sum,inst)=>{const task=tmap.get(inst.taskId);return sum+(task?getInstanceStars(inst,task):0);},0);
   const rate=parseFloat(state.pointValueBRL)||0.10;
   let moneyStars=0, goalStars=0;
-  weekApproved.forEach(inst=>{const task=tmap.get(inst.taskId); if(!task) return; const s=getInstanceStars(inst,task); if((task.rewardType||'money')==='goal') goalStars+=s; else moneyStars+=s;});
+  weekApproved.forEach(inst=>{const task=tmap.get(inst.taskId); if(!task) return; const s=getInstanceStars(inst,task); const rt=task.rewardType||'money';
+    if(rt==='money'||rt==='both') moneyStars+=s;
+    if(rt==='goal'||rt==='both') goalStars+=s;
+  });
   const moneyBRL=moneyStars*rate;
   let totalGoalsAll=0;
-  instAll.forEach(inst=>{if(inst.status!=='approved') return; const task=tmap.get(inst.taskId); if(!task) return; if((task.rewardType||'money')==='goal') totalGoalsAll+=getInstanceStars(inst,task);});
+  instAll.forEach(inst=>{if(inst.status!=='approved') return; const task=tmap.get(inst.taskId); if(!task) return; const rt=task.rewardType||'money'; if(rt==='goal'||rt==='both') totalGoalsAll+=getInstanceStars(inst,task);});
   state.totalGoalStars=totalGoalsAll;
   return {todayTotal:todayInst.length,todayDoneLike:todayDoneLike.length,pendingCount:todayInst.filter(i=>i.status==='child_marked').length,weekApprovedCount:weekApproved.length,weekApprovedStars,moneyBRL,goalStars,totalGoalStars:totalGoalsAll};
 }
@@ -1085,7 +1088,10 @@ function renderChild(){
     const mid=document.createElement('div');
     const title=document.createElement('p'); title.className='title'; title.textContent=task.title;
     const sub=document.createElement('div'); sub.className='sub';
-    const badgeStars=document.createElement('span'); badgeStars.className='badge'; badgeStars.textContent=`⭐ +${Math.max(1,Math.min(5,task.points||1))}`;
+    const badgeStars=document.createElement('span'); badgeStars.className='badge';
+    const rt=task.rewardType||'money';
+    const rtIcon=rt==='both'?'💰🏆':rt==='goal'?'🏆':'💰';
+    badgeStars.textContent=`${rtIcon} +${Math.max(1,Math.min(5,task.points||1))}`;
     const badgeStatus=document.createElement('span'); badgeStatus.className='badge';
 
     const isTimerRunning=task.hasTimer && inst.timerStartedAt && inst.elapsedSeconds==null;
@@ -1316,7 +1322,7 @@ function renderParent(){
       <td>${esc(t.title)}</td>
       <td>${Math.max(1,Math.min(5,parseInt(t.points,10)||1))}</td>
       <td>${esc(formatDays(t.frequency||'daily',t.days))}</td>
-      <td>${(t.rewardType||'money')==='goal'?'🏆 Meta':'💰 Dinheiro'}</td>
+      <td>${{money:'💰 Dinheiro',goal:'🏆 Meta',both:'💰🏆 Ambos'}[t.rewardType||'money']||'💰 Dinheiro'}</td>
       <td>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-secondary" style="height:40px" data-act="edit">Editar</button>
