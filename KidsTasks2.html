@@ -1,0 +1,1339 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#0b2a5b" />
+<!--
+  KidsTasks v2
+  © 2025 MGC Dev — Marlon Gomes da Costa
+  Projeto pessoal. Proibido uso comercial sem autorização.
+  https://github.com/Magoc25/KidsTasks-App
+-->
+<meta name="description" content="KidsTasks — tarefas infantis com aprovação por estrelas e sincronização opcional via Supabase." />
+<title>KidsTasks</title>
+<link rel="manifest" href="./manifest.json" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>/* KidsTasksMoney — single-file (v4) */
+:root{--font:system-ui,-apple-system,"Inter","Segoe UI",Roboto,Arial,sans-serif;--r-btn:8px;--r-card:12px;--r-pill:9999px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-6:24px;--sp-7:32px;--canvas:#fff;--surface:#f6f6f5;--hairline:rgba(15,15,15,.12);--hairline-strong:rgba(15,15,15,.20);--ink:#191919;--ink-deep:#0f0f0f;--slate:rgba(15,15,15,.62);--muted:rgba(15,15,15,.38);--navy:#0b2a5b;--navy-deep:#071f45;--primary:#6e56cf;--primary-pressed:#5b45c9;--success:#21c36b;--warning:#ff9d2e;--error:#ef4444;--tint-mint:#e8f6ee;--tint-peach:#fdebe3;--tint-lav:#efeaff;--tint-sky:#e9f3ff;--tint-yellow:#fff4cc;--sh-1:rgba(15,15,15,.04) 0 1px 2px;--sh-2:rgba(15,15,15,.08) 0 4px 12px;--sh-3:rgba(15,15,15,.20) 0 24px 48px -8px;--hit:44px}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;font-family:var(--font);color:var(--ink);background:var(--surface)}
+.app{min-height:100vh;background:linear-gradient(180deg,var(--navy) 0,var(--navy) 240px,var(--surface) 240px)}
+.header{color:#fff;padding:var(--sp-6) var(--sp-4) var(--sp-4);position:relative;overflow:hidden}
+.header::before,.header::after{content:"";position:absolute;width:280px;height:280px;border-radius:50%}
+.header::before{right:-130px;top:-130px;background:radial-gradient(circle at 30% 30%,rgba(110,86,207,.35),rgba(110,86,207,0) 60%)}
+.header::after{left:-140px;top:-170px;background:radial-gradient(circle at 30% 30%,rgba(255,244,204,.28),rgba(255,244,204,0) 60%)}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;position:relative;z-index:1;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.avatar{width:44px;height:44px;border-radius:var(--r-pill);background:linear-gradient(135deg,#ffd36b,#ff8fb1);border:1px solid rgba(255,255,255,.25);box-shadow:rgba(0,0,0,.22) 0 10px 18px -10px;flex:none}
+.titleblock .title{font-weight:600;font-size:18px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.titleblock .subtitle{font-size:14px;color:rgba(255,255,255,.78)}
+.container{max-width:1040px;margin:0 auto;padding:0 var(--sp-4) var(--sp-7);transform:translateY(-28px);position:relative;z-index:2}
+.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.app{background:linear-gradient(180deg,var(--navy) 0,var(--navy) 280px,var(--surface) 280px)}.container{padding-bottom:96px}}
+.card{background:var(--canvas);border:1px solid var(--hairline);border-radius:var(--r-card);box-shadow:var(--sh-2)}
+.card .hd{padding:var(--sp-4);display:flex;align-items:baseline;justify-content:space-between;gap:12px;border-bottom:1px solid rgba(15,15,15,.06)}
+.card .hd h2{margin:0;font-size:20px;font-weight:600;letter-spacing:-.2px}
+.card .hd .meta{font-size:14px;color:var(--slate)}
+.card .bd{padding:var(--sp-4)}
+.btn{height:var(--hit);padding:0 var(--sp-4);border-radius:var(--r-btn);border:1px solid transparent;font-weight:500;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:10px;user-select:none;transition:transform .06s ease,background .15s ease,border-color .15s ease;white-space:nowrap}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:rgba(0,0,0,.18) 0 10px 18px -12px}
+.btn-primary:active{background:var(--primary-pressed)}
+.btn-secondary{background:transparent;border-color:var(--hairline-strong);color:var(--ink)}
+.btn-secondary-on-dark{background:transparent;border-color:rgba(255,255,255,.55);color:#fff}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:var(--r-pill);font-size:13px;font-weight:600;border:1px solid rgba(15,15,15,.10);background:rgba(255,255,255,.82)}
+.badge.await{color:#7a4d00;border-color:rgba(255,157,46,.35)}
+.badge.ok{color:#0b6b3a;border-color:rgba(33,195,107,.35)}
+.badge.rej{color:#8a1f1f;border-color:rgba(239,68,68,.30)}
+.tasks{display:flex;flex-direction:column;gap:12px}
+.task{display:grid;grid-template-columns:56px 1fr var(--hit);gap:12px;align-items:center;border:1px solid rgba(15,15,15,.10);border-radius:var(--r-card);padding:12px;background:var(--canvas);box-shadow:var(--sh-1)}
+.task[data-tint=mint]{background:linear-gradient(180deg,var(--tint-mint),#fff)}
+.task[data-tint=peach]{background:linear-gradient(180deg,var(--tint-peach),#fff)}
+.task[data-tint=yellow]{background:linear-gradient(180deg,var(--tint-yellow),#fff)}
+.task[data-tint=sky]{background:linear-gradient(180deg,var(--tint-sky),#fff)}
+.task[data-tint=lav]{background:linear-gradient(180deg,var(--tint-lav),#fff)}
+.ico{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;background:rgba(255,255,255,.72);border:1px solid rgba(15,15,15,.10);font-size:28px;box-shadow:rgba(0,0,0,.12) 0 10px 18px -14px}
+.task .title{font-size:18px;font-weight:600;letter-spacing:-.2px;margin:0}
+.task .sub{margin-top:4px;font-size:13px;color:var(--slate);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.check{width:var(--hit);height:var(--hit);border-radius:var(--r-btn);border:1px solid var(--hairline-strong);background:#fff;cursor:pointer;display:grid;place-items:center}
+.check[data-state=done]{background:rgba(33,195,107,.10);border-color:rgba(33,195,107,.45)}
+.check svg{width:22px;height:22px}.check .tick{stroke:rgba(15,15,15,.45);stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.check[data-state=done] .tick{stroke:var(--success)}
+.summary{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tile{border-radius:var(--r-card);padding:16px;border:1px solid rgba(15,15,15,.10);background:var(--tint-sky);box-shadow:var(--sh-1)}
+.tile:nth-child(2){background:var(--tint-lav)}
+.tile .k{font-size:13px;color:var(--slate);margin-bottom:6px;font-weight:500}
+.tile .v{font-size:22px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;gap:10px}
+.starIcon{width:18px;height:18px;display:inline-block;background:radial-gradient(circle at 30% 30%,#ffe58a,#f7b500 70%);clip-path:polygon(50% 0%,62% 34%,98% 35%,69% 56%,79% 90%,50% 70%,21% 90%,31% 56%,2% 35%,38% 34%)}
+.progress{margin-top:16px;background:rgba(15,15,15,.06);border-radius:var(--r-pill);height:14px;overflow:hidden;border:1px solid rgba(15,15,15,.08)}
+.progress>div{height:100%;width:0%;background:linear-gradient(90deg,var(--success),#7ae7b0);transition:width .25s ease}
+.progress-row{display:flex;justify-content:space-between;align-items:center;margin-top:8px;color:var(--slate);font-size:14px}
+.table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid var(--hairline);border-radius:var(--r-card)}
+.table th,.table td{padding:12px 14px;border-bottom:1px solid rgba(15,15,15,.06);text-align:left;font-size:14px}
+.table th{background:var(--surface);font-weight:600;color:var(--slate)}
+.table tr:last-child td{border-bottom:none}
+.kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:900px){.kpi{grid-template-columns:1fr}}
+.kpi .kcard{padding:16px;border-radius:var(--r-card);border:1px solid rgba(15,15,15,.10);background:#fff;box-shadow:var(--sh-1)}
+.kpi .kcard .k{font-size:13px;color:var(--slate);font-weight:500}
+.kpi .kcard .v{margin-top:6px;font-size:22px;font-weight:700;letter-spacing:-.2px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.pill{padding:8px 12px;border-radius:var(--r-pill);border:1px solid var(--hairline);background:#fff;color:rgba(15,15,15,.62);font-size:14px;cursor:pointer}
+.pill.active{background:var(--ink-deep);border-color:var(--ink-deep);color:#fff}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;padding:16px;z-index:30}
+.overlay.open{display:flex}
+.modal{width:min(760px,100%);background:var(--canvas);border-radius:var(--r-card);border:1px solid var(--hairline);box-shadow:var(--sh-3);overflow:hidden}
+.modal .mhd{padding:16px;background:linear-gradient(180deg,var(--navy-deep),var(--navy));color:#fff}
+.modal .mhd h3{margin:0;font-size:18px;font-weight:600}
+.modal .mhd p{margin:6px 0 0;font-size:14px;color:rgba(255,255,255,.80)}
+.modal .mbd{padding:16px}
+.input{height:var(--hit);border-radius:var(--r-btn);border:1px solid var(--hairline-strong);padding:0 14px;font-size:16px;outline:none;background:#fff}
+.input:focus{border:2px solid var(--primary)}
+.hidden{display:none!important}
+.cloud-indicator{display:inline-flex;align-items:center;gap:8px;border-radius:999px;border:1px solid rgba(255,255,255,.35);padding:6px 10px;background:rgba(0,0,0,.12);cursor:pointer;color:#fff}
+.cloud-dot{width:10px;height:10px;border-radius:999px;background:var(--warning)}
+.cloud-connected .cloud-dot{background:var(--success)}
+.cloud-error .cloud-dot{background:var(--error)}
+.toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);z-index:99;background:#111827;color:#fff;padding:10px 14px;border-radius:12px;font-size:14px;box-shadow:rgba(0,0,0,.22) 0 12px 26px -14px}
+.starPick button{background:transparent;border:none;font-size:18px;cursor:pointer;line-height:1;padding:0 2px;color:#4b5563}
+.starPick button.on{color:#facc15}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <div class="topbar">
+      <div class="brand">
+        <div class="avatar" aria-hidden="true"></div>
+        <div class="titleblock">
+          <div class="title">KidsTasks</div>
+          <div class="subtitle">Tarefas com ⭐, metas e aprovação do responsável · <span id="appVersion">© MGC</span></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+        <button id="cloudBtn" class="cloud-indicator" type="button" title="Supabase não configurado">☁️ <span class="cloud-dot"></span></button>
+        <button class="btn btn-secondary-on-dark" id="btnChild" type="button">👦 Criança</button>
+        <button class="btn btn-secondary-on-dark" id="btnParent" type="button">🔒 Responsável</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="childPanel">
+      <div class="grid">
+        <section class="card">
+          <div class="hd"><h2>Tarefas de hoje</h2><div class="meta" id="todayLabel"></div></div>
+          <div class="bd">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
+              <div>
+                <div style="font-weight:700;font-size:18px">Olá, <span id="childName">Criança</span>!</div>
+                <div style="color:var(--slate);font-size:14px">Marque as tarefas e espere a aprovação 😊</div>
+              </div>
+              <button class="btn btn-primary" id="goParentDash" type="button">📊 Painel</button>
+            </div>
+            <div class="tasks" id="tasks"></div>
+          </div>
+        </section>
+
+        <aside class="card">
+          <div class="hd"><h2>Semana</h2><div class="meta">Progresso</div></div>
+          <div class="bd">
+            <div class="summary">
+              <div class="tile"><div class="k">Estrelas aprovadas</div><div class="v"><span class="starIcon" aria-hidden="true"></span><span id="stars">0</span></div></div>
+              <div class="tile"><div class="k">Tarefas aprovadas</div><div class="v">✅ <span id="approved">0</span></div></div>
+            </div>
+            <div class="progress" aria-label="Progresso de hoje"><div id="bar"></div></div>
+            <div class="progress-row"><span id="progressText">0 de 0</span><span id="pendingText">0 aguardando</span></div>
+            <p style="margin:16px 0 0;color:var(--slate);font-size:14px;line-height:1.5">Ao marcar uma tarefa, ela fica <strong>aguardando</strong> aprovação.</p>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="parentPanel" class="hidden">
+      <section class="card" style="margin-bottom:16px">
+        <div class="hd"><h2>Painel do responsável</h2><div class="meta"><span id="familyLabel">Família</span> · <span id="todayLabelParent"></span></div></div>
+        <div class="bd">
+          <div class="kpi">
+            <div class="kcard"><div class="k">Pendentes (hoje)</div><div class="v" id="kAwait">0</div></div>
+            <div class="kcard"><div class="k">Aprovadas (semana)</div><div class="v" id="kApproved">0</div></div>
+            <div class="kcard"><div class="k">Estrelas (semana)</div><div class="v">⭐ <span id="kPoints">0</span></div></div>
+          </div>
+          <div style="margin-top:16px" class="tabs">
+            <button class="pill active" data-tab="approvals" type="button">✅ Aprovar</button>
+            <button class="pill" data-tab="week" type="button">📅 Semana</button>
+            <button class="pill" data-tab="tasks" type="button">🧾 Tarefas</button>
+            <button class="pill" data-tab="goals" type="button">🏆 Metas</button>
+            <button class="pill" data-tab="settings" type="button">⚙️ Config</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="panelApprovals">
+        <div class="hd"><h2>Aprovações do dia</h2><div class="meta">clique em ★ para aprovar com 1–5 estrelas</div></div>
+        <div class="bd">
+          <table class="table"><thead><tr><th>Tarefa</th><th>⭐</th><th>Status</th><th>Ações</th></tr></thead><tbody id="approvalsBody"></tbody></table>
+        </div>
+      </section>
+
+      <section class="card hidden" id="panelWeek">
+        <div class="hd"><h2>Resumo da semana</h2><div class="meta">Dom–Sáb</div></div>
+        <div class="bd">
+          <div class="summary">
+            <div class="tile"><div class="k">Aprovadas</div><div class="v">✅ <span id="weekApproved">0</span></div></div>
+            <div class="tile"><div class="k">Estrelas</div><div class="v"><span class="starIcon" aria-hidden="true"></span><span id="weekPoints">0</span></div></div>
+          </div>
+          <div style="margin-top:16px" class="summary">
+            <div class="tile" style="background:var(--tint-yellow)"><div class="k">💰 A receber</div><div class="v" style="font-size:18px"><span id="weekMoney">R$ 0,00</span></div><div style="color:var(--slate);font-size:13px;margin-top:6px">Tarefas 💰</div></div>
+            <div class="tile" style="background:var(--tint-peach)"><div class="k">🏆 Estrelas de metas</div><div class="v" style="font-size:18px">⭐ <span id="weekGoalStars">0</span></div><div style="color:var(--slate);font-size:13px;margin-top:6px">Tarefas 🏆</div></div>
+          </div>
+          <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-primary" id="btnPaid" type="button">Registrar pagamento</button>
+            <span class="badge" style="background:var(--surface)">💡 O app só registra — pagamento real é fora do app.</span>
+          </div>
+          <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-secondary" id="btnPix" type="button">💖 Apoiar (PIX)</button>
+            <button class="btn btn-secondary" id="btnReviews" type="button">⭐ Avaliações</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card hidden" id="panelTasks">
+        <div class="hd"><h2>Tarefas cadastradas</h2><div class="meta">cadastre, edite e ajuste</div></div>
+        <div class="bd">
+          <form id="addTaskForm" style="display:grid;grid-template-columns: 150px 1fr 110px 140px 140px auto;gap:8px;align-items:end;margin-bottom:12px">
+            <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Ícone
+              <select class="input" id="fIcon"></select>
+            </label>
+            <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Nome<input class="input" id="fTitle" placeholder="Ex: Guardar brinquedos"/></label>
+            <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">⭐ (1–5)<input class="input" id="fPoints" type="number" min="1" max="5" value="1"/></label>
+            <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Frequência<select class="input" id="fFreq"><option value="daily">diária</option><option value="weekly">semanal</option></select></label>
+            <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Tipo<select class="input" id="fReward"><option value="money">💰 Dinheiro</option><option value="goal">🏆 Meta</option></select></label>
+            <button class="btn btn-primary" type="submit">+ Adicionar</button>
+          </form>
+          <table class="table"><thead><tr><th>Ícone</th><th>Tarefa</th><th>⭐</th><th>Frequência</th><th>Tipo</th><th>Ações</th></tr></thead><tbody id="tasksBody"></tbody></table>
+        </div>
+      </section>
+
+      <section class="card hidden" id="panelGoals">
+        <div class="hd"><h2>🏆 Metas e recompensas</h2><div class="meta">acumula ⭐ de tarefas tipo meta</div></div>
+        <div class="bd">
+          <div class="card" style="box-shadow:none;background:var(--surface);margin-bottom:12px">
+            <div class="bd" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+              <div>
+                <div style="color:var(--slate);font-size:13px">Total acumulado (meta)</div>
+                <div style="font-size:28px;font-weight:800;color:#ff9d2e">⭐ <span id="totalGoalStarsEl">0</span></div>
+              </div>
+              <form id="newGoalForm" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+                <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Nome<input class="input" id="newGoalTitle" placeholder="Ex: Brinquedo novo"/></label>
+                <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Ícone
+                  <select class="input" id="newGoalIcon"></select>
+                </label>
+                <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Meta (⭐)<input class="input" id="newGoalTarget" type="number" min="1" value="30" style="width:120px"/></label>
+                <button class="btn btn-primary" type="submit">Adicionar</button>
+              </form>
+            </div>
+          </div>
+          <div id="goalsList"></div>
+        </div>
+      </section>
+
+      <section class="card hidden" id="panelSettings">
+        <div class="hd"><h2>Configurações</h2><div class="meta">família, PIN e Supabase</div></div>
+        <div class="bd">
+          <div class="card" style="box-shadow:none;background:var(--surface);margin-bottom:12px">
+            <div class="bd">
+              <h3 style="margin:0 0 10px;font-size:16px">Família e crianças</h3>
+              <p style="margin:0 0 12px;color:var(--slate);font-size:14px;line-height:1.5">Crie/Busque a família e adicione crianças.</p>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Nome da família<input class="input" id="familyNameInput" placeholder="Ex: Família Silva"/></label>
+                <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Nome da criança<input class="input" id="childNameInput" placeholder="Ex: Alice"/></label>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+                <button class="btn btn-primary" id="familyCreateBtn" type="button">Criar família</button>
+                <button class="btn btn-secondary" id="childCreateBtn" type="button">Adicionar criança</button>
+                <button class="btn btn-primary" id="loadFamilyBtn" type="button">🔍 Buscar família</button>
+                <button class="btn btn-secondary" id="refreshChildrenBtn" type="button">Atualizar lista</button>
+              </div>
+              <div style="margin-top:12px">
+                <h4 style="margin:0 0 8px;font-size:14px;color:var(--slate)">Crianças</h4>
+                <div id="childrenList" style="display:flex;flex-direction:column;gap:8px"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="box-shadow:none;background:var(--surface);margin-bottom:12px">
+            <div class="bd">
+              <h3 style="margin:0 0 10px;font-size:16px">Conversão para dinheiro</h3>
+              <p style="margin:0 0 12px;color:var(--slate);font-size:14px;line-height:1.5">Define quanto vale cada ⭐ em dinheiro para tarefas 💰.</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+                <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Valor por ⭐ (R$)<input class="input" id="settingPointValue" type="number" min="0.01" step="0.01" style="width:140px"/></label>
+                <button class="btn btn-secondary" id="settingPointValueSaveBtn" type="button">Salvar taxa</button>
+                <span id="settingPointValuePreview" style="color:var(--slate);font-size:14px"></span>
+              </div>
+              <label style="display:flex;gap:10px;align-items:center;margin-top:12px"><input type="checkbox" id="toggleShowMoney" /> <span><strong>Mostrar dinheiro para a criança</strong> (senão, mostra só ⭐)</span></label>
+            </div>
+          </div>
+
+          <div class="card" style="box-shadow:none;background:var(--surface)">
+            <div class="bd">
+              <h3 style="margin:0 0 10px;font-size:16px">PIN do responsável</h3>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+                <label style="display:flex;gap:10px;align-items:center"><input type="checkbox" id="settingParentPinEnabled" /> <span>Ativar PIN</span></label>
+                <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">PIN<input class="input" id="settingParentPinInput" inputmode="numeric" maxlength="6" placeholder="1234" style="width:140px"/></label>
+                <button class="btn btn-secondary" id="settingParentPinSaveBtn" type="button">Salvar PIN</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <!-- PIN Modal -->
+  <div class="overlay" id="pinOverlay" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="mhd"><h3>🔒 Acesso do responsável</h3><p>Digite o PIN para abrir o painel.</p></div>
+      <div class="mbd">
+        <div style="display:flex;gap:8px">
+          <input class="input" id="pinInput" inputmode="numeric" maxlength="6" placeholder="••••" style="flex:1;text-align:center;letter-spacing:4px" />
+          <button class="btn btn-primary" id="pinUnlock" type="button">Entrar</button>
+          <button class="btn btn-secondary" id="pinClose" type="button">Cancelar</button>
+        </div>
+        <p style="margin:12px 0 0;color:var(--slate);font-size:14px">PIN inicial: <strong>1234</strong> (altere em Config).</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cloud Modal -->
+  <div class="overlay" id="cloudOverlay" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="mhd"><h3>☁️ Sincronização (Supabase)</h3><p>Cole URL e anon key do seu Supabase (salvo apenas neste dispositivo).</p></div>
+      <div class="mbd">
+        <div style="display:grid;grid-template-columns:1fr;gap:10px">
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Project URL
+            <input class="input" id="supabaseUrlInput" placeholder="https://xxxx.supabase.co" />
+          </label>
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Anon key
+            <input class="input" id="supabaseAnonInput" type="password" placeholder="sb_publishable_..." />
+          </label>
+          <div id="supabaseConfigStatus" style="color:var(--slate);font-size:14px"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;margin-top:12px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-secondary" id="supabaseRemoveBtn" type="button">Remover</button>
+            <button class="btn btn-secondary" id="supabaseTestBtn" type="button">Testar</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-secondary" id="cloudClose" type="button">Fechar</button>
+            <button class="btn btn-primary" id="supabaseSaveBtn" type="button">Salvar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Task Modal -->
+  <div class="overlay" id="editTaskOverlay" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="mhd"><h3>✏️ Editar tarefa</h3><p>Atualize os dados e salve.</p></div>
+      <div class="mbd">
+        <form id="editTaskForm" style="display:grid;grid-template-columns:1fr;gap:10px">
+          <input type="hidden" id="editTaskId" />
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Ícone
+            <select class="input" id="editIcon"></select>
+          </label>
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Nome
+            <input class="input" id="editTitle" placeholder="Nome da tarefa" />
+          </label>
+          <div style="display:grid;grid-template-columns: 1fr 1fr;gap:8px">
+            <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">⭐ (1–5)
+              <input class="input" id="editPoints" type="number" min="1" max="5" value="1" />
+            </label>
+            <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Frequência
+              <select class="input" id="editFreq"><option value="daily">diária</option><option value="weekly">semanal</option></select>
+            </label>
+          </div>
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Tipo
+            <select class="input" id="editReward"><option value="money">💰 Dinheiro</option><option value="goal">🏆 Meta</option></select>
+          </label>
+          <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px">
+            <button class="btn btn-secondary" type="button" id="editCancel">Cancelar</button>
+            <button class="btn btn-primary" type="submit">Salvar</button>
+          </div>
+        </form>
+        <p style="margin:12px 0 0;color:var(--muted);font-size:12px;line-height:1.4">Dica: editar não apaga histórico; as instâncias já registradas continuam.</p>
+      </div>
+    </div>
+  </div>
+
+  
+
+  <!-- Edit Goal Modal (v5) -->
+  <div class="overlay" id="editGoalOverlay" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="mhd"><h3>✏️ Editar meta</h3><p>Atualize e salve.</p></div>
+      <div class="mbd">
+        <form id="editGoalForm" style="display:grid;grid-template-columns:1fr;gap:10px">
+          <input type="hidden" id="editGoalId" />
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Ícone
+            <select class="input" id="editGoalIcon"></select>
+          </label>
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Nome
+            <input class="input" id="editGoalTitle" placeholder="Nome da meta" />
+          </label>
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Meta (⭐)
+            <input class="input" id="editGoalTarget" type="number" min="1" value="30" />
+          </label>
+          <label style="display:flex;gap:10px;align-items:center;color:var(--slate);font-size:13px">
+            <input type="checkbox" id="editGoalDelivered" /> Marcar como entregue
+          </label>
+          <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px">
+            <button class="btn btn-secondary" type="button" id="editGoalCancel">Cancelar</button>
+            <button class="btn btn-primary" type="submit">Salvar</button>
+          </div>
+        </form>
+        <p style="margin:12px 0 0;color:var(--muted);font-size:12px;line-height:1.4">Dica: editar meta não mexe nas ⭐ já acumuladas; só altera nome/ícone/alvo.</p>
+      </div>
+    </div>
+  </div>
+
+<!-- PIX Modal -->
+  <div class="overlay" id="pixOverlay" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="mhd"><h3>💖 Apoiar via PIX</h3><p>Se o app ajudou, considere apoiar.</p></div>
+      <div class="mbd">
+        <div id="pixQrContainer" style="text-align:center;margin-bottom:12px;min-height:220px;display:flex;align-items:center;justify-content:center"></div>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+          <button class="btn btn-secondary" id="pixCopyBtn" type="button">Copiar código PIX</button>
+          <button class="btn btn-primary" id="pixToReview" type="button">✅ Já fiz o PIX — avaliar</button>
+          <button class="btn btn-secondary" id="pixClose" type="button">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reviews Modal -->
+  <div class="overlay" id="reviewsOverlay" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="mhd"><h3>⭐ Avaliações</h3><p>As avaliações ficam visíveis para outras pessoas.</p></div>
+      <div class="mbd">
+        <div id="reviewListMode">
+          <div id="reviewsList" style="max-height:260px;overflow:auto;margin-bottom:12px"></div>
+          <button class="btn btn-primary" id="reviewListToPixBtn" type="button" style="width:100%">💖 Apoiar via PIX para avaliar</button>
+        </div>
+        <div id="reviewFormMode" class="hidden">
+          <p style="color:var(--slate);font-size:14px;margin:0 0 10px">Obrigado pelo apoio! Deixe sua avaliação.</p>
+          <div style="text-align:center;margin-bottom:8px">
+            <span class="star-btn" style="font-size:28px;cursor:pointer;color:#4b5563">★</span>
+            <span class="star-btn" style="font-size:28px;cursor:pointer;color:#4b5563">★</span>
+            <span class="star-btn" style="font-size:28px;cursor:pointer;color:#4b5563">★</span>
+            <span class="star-btn" style="font-size:28px;cursor:pointer;color:#4b5563">★</span>
+            <span class="star-btn" style="font-size:28px;cursor:pointer;color:#4b5563">★</span>
+          </div>
+          <input type="hidden" id="reviewStarInput" value="0" />
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <label style="font-size:13px;color:var(--slate)">Seu nome*
+              <input class="input" id="reviewNameInput" maxlength="40" placeholder="Ex: Maria" />
+            </label>
+            <label style="font-size:13px;color:var(--slate)">Comentário (opcional)
+              <textarea id="reviewCommentInput" rows="2" maxlength="200" style="resize:none;padding:10px;border-radius:12px;border:1px solid var(--hairline-strong)"></textarea>
+            </label>
+            <label style="display:flex;gap:10px;align-items:center;color:var(--slate);font-size:13px">
+              <input type="checkbox" id="reviewDonatedCheck" checked /> Já apoiei via PIX 💖
+            </label>
+            <button class="btn btn-primary" id="submitReviewBtn" type="button">Enviar avaliação</button>
+          </div>
+        </div>
+        <div id="reviewThankYou" class="hidden" style="text-align:center;padding:14px 0">
+          <div style="font-size:28px;margin-bottom:6px">🎉</div>
+          <div style="font-weight:700;margin-bottom:6px">Obrigado!</div>
+          <div id="reviewThankYouMsg" style="color:var(--slate);font-size:14px;margin-bottom:12px"></div>
+          <button class="btn btn-secondary" id="backToListBtn" type="button">Ver avaliações</button>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px">
+          <button class="btn btn-secondary" id="reviewsClose" type="button">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>// KidsTasksMoney v5 — edição de tarefas integrada
+
+const STORAGE_KEY='ktmv0state';
+const SUPABASE_URL_KEY='ktm_supabase_url';
+const SUPABASE_ANON_KEY='ktm_supabase_anon';
+
+const TASK_ICON_OPTIONS=['📌','🛏️','🧸','🪥','🧼','🍽️','🧹','🧽','🗑️','🐶','🐱','🌿','📚','✏️','🧺','👕','👟','🚿','🧻','🪣','🧴','🍎','🥗','💧','⏰','🎒','🎹','⚽','🏃','🧘','🎨','🧩','🌟','✅'];
+const GOAL_ICON_OPTIONS=['🎯','🎁','🍦','🎮','📱','🧸','📚','⚽','🎨','🧩','🚲','🛴','🏖️','🎬','🍕','🧁','🐾','🌟','🏆'];
+
+function starString(n){const s=Math.max(0,Math.min(5,parseInt(n,10)||0));return '★'.repeat(s)+'☆'.repeat(5-s);} 
+function populateIconSelect(selectEl, options, fallback){
+  if(!selectEl) return;
+  selectEl.innerHTML='';
+  options.forEach(icon=>{const opt=document.createElement('option');opt.value=icon;opt.textContent=icon;selectEl.appendChild(opt);});
+  if(fallback && options.includes(fallback)) selectEl.value=fallback;
+}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+
+const defaultState={
+  mode:'child',
+  parentPinEnabled:true,
+  parentPin:'1234',
+  familyId:'',
+  familyName:'',
+  childId:'',
+  childrenList:[],
+  pointValueBRL:0.10,
+  showMoneyToChild:false,
+  weekPaid:false,
+  totalGoalStars:0,
+  goals:[],
+  tasks:[
+    {id:'t1',title:'Arrumar a cama',icon:'🛏️',tint:'mint',points:3,frequency:'daily',rewardType:'money'},
+    {id:'t2',title:'Guardar brinquedos',icon:'🧸',tint:'peach',points:2,frequency:'daily',rewardType:'money'},
+    {id:'t3',title:'Escovar os dentes',icon:'🪥',tint:'yellow',points:2,frequency:'daily',rewardType:'goal'}
+  ],
+  instances:[]
+};
+
+function loadState(){
+  try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw) return structuredClone(defaultState);
+    const parsed=JSON.parse(raw);
+    return {...structuredClone(defaultState),...parsed,
+      tasks:Array.isArray(parsed?.tasks)?parsed.tasks:structuredClone(defaultState.tasks),
+      instances:Array.isArray(parsed?.instances)?parsed.instances:[]};
+  }catch(e){console.error('[App] loadState',e);return structuredClone(defaultState);} 
+}
+let state=loadState();
+
+
+// ===== v6: Multi-criança (tarefas/metas/instâncias separadas por criança) =====
+function activeChildId(){
+  return state.childId || (Array.isArray(state.childrenList) && state.childrenList[0] ? state.childrenList[0].id : '');
+}
+function isUuidLike(id){
+  return typeof id==='string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+}
+function migratePerChildData(){
+  const cid = activeChildId();
+  if(!cid) return;
+  (state.tasks||[]).forEach(t=>{ if(!t.childId) t.childId = cid; });
+  (state.goals||[]).forEach(g=>{ if(!g.childId) g.childId = cid; });
+  (state.instances||[]).forEach(i=>{ if(!i.childId) i.childId = cid; });
+}
+function tasksForChild(cid){
+  const c = cid || activeChildId();
+  return (state.tasks||[]).filter(t => (t.childId) === c);
+}
+function goalsForChild(cid){
+  const c = cid || activeChildId();
+  return (state.goals||[]).filter(g => (g.childId) === c);
+}
+function instancesForChild(cid){
+  const c = cid || activeChildId();
+  return (state.instances||[]).filter(i => (i.childId) === c);
+}
+
+function saveState(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(e){console.error('[App] saveState',e);} }
+function $(sel,root=document){return root.querySelector(sel);} 
+function $all(sel,root=document){return [...root.querySelectorAll(sel)];}
+function toast(msg,kind='info'){
+  const t=document.createElement('div');t.className='toast';
+  t.style.background=kind==='error'?'#ef4444':(kind==='ok'?'#0f172a':'#111827');
+  t.textContent=msg;document.body.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .18s ease';},1600);
+  setTimeout(()=>t.remove(),1900);
+}
+
+function formatDateBR(){return new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'});} 
+function getTodayISO(){return new Date().toISOString().slice(0,10);} 
+function getWeekRange(){
+  const d=new Date();const day=d.getDay();const sunday=new Date(d);sunday.setDate(d.getDate()-day);
+  const saturday=new Date(sunday);saturday.setDate(sunday.getDate()+6);
+  const fmt=dt=>dt.toISOString().slice(0,10);
+  return {start:fmt(sunday), end:fmt(saturday)};
+}
+function getInstanceStars(inst, task){
+  const base=(task && typeof task.points==='number')?task.points:1;
+  const s=(inst && typeof inst.approvedStars==='number')?inst.approvedStars:base;
+  return Math.max(1,Math.min(5,parseInt(s,10)||1));
+}
+
+function ensureInstancesForToday(){
+  migratePerChildData();
+  const cid = activeChildId();
+  const today=getTodayISO();
+  const existing=new Set(instancesForChild(cid).filter(i=>i.date===today).map(i=>i.taskId));
+  tasksForChild(cid).forEach(t=>{
+    if(!existing.has(t.id)) (state.instances||[]).push({id:`i-${t.id}-${today}-${cid}`,childId:cid,taskId:t.id,date:today,status:'pending',approvedStars:null});
+  });
+}
+
+
+function computeSummary(){
+  migratePerChildData();
+  const cid=activeChildId();
+  const today=getTodayISO();
+  const week=getWeekRange();
+  const instAll=instancesForChild(cid);
+  const todayInst=instAll.filter(i=>i.date===today);
+  const todayDoneLike=todayInst.filter(i=>i.status==='child_marked' || i.status==='approved');
+  const weekInst=instAll.filter(i=>i.date>=week.start && i.date<=week.end);
+  const weekApproved=weekInst.filter(i=>i.status==='approved');
+  const tmap=new Map(tasksForChild(cid).map(t=>[t.id,t]));
+  const weekApprovedStars=weekApproved.reduce((sum,inst)=>{const task=tmap.get(inst.taskId);return sum+(task?getInstanceStars(inst,task):0);},0);
+  const rate=parseFloat(state.pointValueBRL)||0.10;
+  let moneyStars=0, goalStars=0;
+  weekApproved.forEach(inst=>{const task=tmap.get(inst.taskId); if(!task) return; const s=getInstanceStars(inst,task); if((task.rewardType||'money')==='goal') goalStars+=s; else moneyStars+=s;});
+  const moneyBRL=moneyStars*rate;
+  let totalGoalsAll=0;
+  instAll.forEach(inst=>{if(inst.status!=='approved') return; const task=tmap.get(inst.taskId); if(!task) return; if((task.rewardType||'money')==='goal') totalGoalsAll+=getInstanceStars(inst,task);});
+  state.totalGoalStars=totalGoalsAll;
+  return {todayTotal:todayInst.length,todayDoneLike:todayDoneLike.length,pendingCount:todayInst.filter(i=>i.status==='child_marked').length,weekApprovedCount:weekApproved.length,weekApprovedStars,moneyBRL,goalStars,totalGoalStars:totalGoalsAll};
+}
+
+
+// Supabase
+let supabaseClient=null;
+let supabaseConfig={url:'',anonKey:''};
+function loadSupabaseConfig(){try{return {url:localStorage.getItem(SUPABASE_URL_KEY)||'',anonKey:localStorage.getItem(SUPABASE_ANON_KEY)||''};}catch(e){return {url:'',anonKey:''};}}
+function saveSupabaseConfig(url,anonKey){try{if(url) localStorage.setItem(SUPABASE_URL_KEY,url); else localStorage.removeItem(SUPABASE_URL_KEY);
+  if(anonKey) localStorage.setItem(SUPABASE_ANON_KEY,anonKey); else localStorage.removeItem(SUPABASE_ANON_KEY);}catch(e){}}
+function setCloudStatus(st,msg){const btn=$('#cloudBtn'); if(!btn) return; btn.classList.remove('cloud-connected','cloud-error'); if(st==='connected') btn.classList.add('cloud-connected'); if(st==='error') btn.classList.add('cloud-error'); btn.title=msg||btn.title;}
+function initSupabaseClient(){supabaseConfig=loadSupabaseConfig();
+  if(window.supabase && supabaseConfig.url && supabaseConfig.anonKey){
+    try{supabaseClient=window.supabase.createClient(supabaseConfig.url,supabaseConfig.anonKey);setCloudStatus('connected','Supabase conectado');}
+    catch(e){supabaseClient=null;setCloudStatus('error','Falha ao criar client');}
+  }else{supabaseClient=null;setCloudStatus('disconnected','Supabase não configurado');}
+}
+
+async function loadFamilyFromSupabase(){if(!supabaseClient) return; const {data,error}=await supabaseClient.from('families').select('id,name').order('created_at',{ascending:true}).limit(1).maybeSingle();
+  if(error) throw error; if(!data) return; state.familyId=data.id; state.familyName=data.name; saveState();}
+async function loadChildrenFromSupabase(){if(!supabaseClient || !state.familyId) return; const {data,error}=await supabaseClient.from('children').select('id,family_id,name,created_at').eq('family_id',state.familyId).order('created_at',{ascending:true});
+  if(error) throw error; state.childrenList=(Array.isArray(data)?data:[]).map(r=>({id:r.id,name:r.name})); if(!state.childId && state.childrenList.length) state.childId=state.childrenList[0].id; saveState();}
+async function loadTasksFromSupabase(){
+  if(!supabaseClient || !state.familyId || !state.childId) return;
+  // carrega apenas tarefas da criança ativa
+  let data=null, error=null;
+  async function retryOld(){
+    return await supabaseClient.from('tasks')
+      .select('id,title,points,frequency,family_id,child_id,created_at')
+      .eq('family_id', state.familyId)
+      .eq('child_id', state.childId)
+      .order('created_at',{ascending:true});
+  }
+  ({data,error}=await supabaseClient.from('tasks')
+    .select('id,title,points,frequency,family_id,child_id,icon,tint,reward_type,created_at')
+    .eq('family_id', state.familyId)
+    .eq('child_id', state.childId)
+    .order('created_at',{ascending:true}));
+  if(error){({data,error}=await retryOld());}
+  if(error) throw error;
+
+  const rows=Array.isArray(data)?data:[];
+  const mapped = rows.map((r,idx)=>({
+    id:r.id,
+    childId:r.child_id || state.childId,
+    title:r.title||'Tarefa',
+    points:(typeof r.points==='number')?Math.max(1,Math.min(5,r.points)):1,
+    frequency:r.frequency||'daily',
+    rewardType:(r.reward_type||'money'),
+    icon:(r.icon||'✅'),
+    tint:(r.tint|| (idx%2?'peach':'mint'))
+  }));
+
+  // Remove somente tarefas do supabase (uuid) da criança ativa e substitui
+  state.tasks = (state.tasks||[]).filter(t => !(t.childId===state.childId && isUuidLike(String(t.id))));
+  state.tasks.push(...mapped);
+  saveState();
+}
+
+async function loadTaskInstancesFromSupabase(){
+  if(!supabaseClient || !state.familyId || !state.childId) return;
+  const week=getWeekRange();
+  const {data,error}=await supabaseClient.from('task_instances')
+    .select('id,family_id,child_id,task_id,date,status,approved_stars')
+    .eq('family_id',state.familyId)
+    .eq('child_id',state.childId)
+    .gte('date',week.start).lte('date',week.end)
+    .order('date',{ascending:true});
+  if(error) throw error;
+
+  const rows = Array.isArray(data)?data:[];
+  // remove instâncias da semana da criança atual e substitui
+  state.instances = (state.instances||[]).filter(i => !(i.childId===state.childId && i.date>=week.start && i.date<=week.end && isUuidLike(String(i.id))));
+  state.instances.push(...rows.map(r=>({
+    id:r.id,
+    childId:r.child_id || state.childId,
+    taskId:r.task_id,
+    date:r.date,
+    status:r.status||'pending',
+    approvedStars:(typeof r.approved_stars==='number')?r.approved_stars:null
+  })));
+  saveState();
+}
+
+async function syncInstanceToSupabase(instance){
+  if(!supabaseClient || !state.familyId || !state.childId || !instance) return false;
+  try{
+    // garante childId local
+    instance.childId = instance.childId || state.childId;
+    const payload={family_id:state.familyId,child_id:state.childId,task_id:instance.taskId,date:instance.date,status:instance.status,approved_stars:(typeof instance.approvedStars==='number')?instance.approvedStars:null};
+    const {data:existing,error:selErr}=await supabaseClient.from('task_instances')
+      .select('id')
+      .eq('family_id',state.familyId).eq('child_id',state.childId)
+      .eq('task_id',instance.taskId).eq('date',instance.date).limit(1);
+    if(selErr) throw selErr;
+    if(existing && existing.length){
+      const {error:upErr}=await supabaseClient.from('task_instances')
+        .update({status:payload.status,approved_stars:payload.approved_stars})
+        .eq('id',existing[0].id);
+      if(upErr) throw upErr;
+      instance.id=existing[0].id;
+    }else{
+      const {data:ins,error:insErr}=await supabaseClient.from('task_instances')
+        .insert(payload).select('id').single();
+      if(insErr) throw insErr;
+      if(ins?.id) instance.id=ins.id;
+    }
+    setCloudStatus('connected','Supabase sincronizado');
+    return true;
+  }catch(e){
+    console.error('[Supabase] syncInstance',e);
+    setCloudStatus('error','Erro ao sincronizar');
+    return false;
+  }
+}
+
+
+// ===== v6: Supabase (metas) =====
+async function loadGoalsFromSupabase(){
+  if(!supabaseClient || !state.familyId || !state.childId) return;
+  const {data,error} = await supabaseClient
+    .from('goals')
+    .select('id,family_id,child_id,title,icon,target_stars,delivered,delivered_at,created_at')
+    .eq('family_id', state.familyId)
+    .eq('child_id', state.childId)
+    .order('created_at',{ascending:true});
+  if(error) throw error;
+
+  const rows = Array.isArray(data)?data:[];
+  // remove metas do supabase da criança ativa e substitui
+  state.goals = (state.goals||[]).filter(g => !(g.childId===state.childId && isUuidLike(String(g.id))));
+  state.goals.push(...rows.map(r=>({
+    id:r.id,
+    childId:r.child_id || state.childId,
+    title:r.title||'Meta',
+    icon:r.icon||'🎯',
+    targetStars:Math.max(1,parseInt(r.target_stars,10)||1),
+    delivered:!!r.delivered,
+    deliveredAt:r.delivered_at||null
+  })));
+  saveState();
+}
+
+async function createGoalInSupabase(goal){
+  if(!supabaseClient || !state.familyId || !state.childId) return null;
+  const payload={family_id:state.familyId, child_id:state.childId, title:goal.title, icon:goal.icon, target_stars:goal.targetStars, delivered:!!goal.delivered, delivered_at:goal.deliveredAt};
+  const {data,error}=await supabaseClient.from('goals').insert(payload).select('id').single();
+  if(error) throw error;
+  return data?.id||null;
+}
+
+async function updateGoalInSupabase(goal){
+  if(!supabaseClient || !state.familyId || !state.childId) return false;
+  const payload={title:goal.title, icon:goal.icon, target_stars:goal.targetStars, delivered:!!goal.delivered, delivered_at:goal.deliveredAt};
+  const {error}=await supabaseClient.from('goals').update(payload).eq('id', goal.id);
+  return !error;
+}
+
+async function deleteGoalFromSupabase(goal){
+  if(!supabaseClient || !state.familyId || !state.childId) return false;
+  const {error}=await supabaseClient.from('goals').delete().eq('id', goal.id);
+  return !error;
+}
+
+async function createFamilyOnly(){if(!supabaseClient) return toast('Configure o Supabase','error'); const name=$('#familyNameInput').value.trim(); if(!name) return toast('Digite o nome da família','error');
+  const {data,error}=await supabaseClient.from('families').insert({name}).select().single(); if(error) throw error; state.familyId=data.id; state.familyName=data.name; saveState();}
+async function createChildOnly(){if(!supabaseClient) return toast('Configure o Supabase','error'); if(!state.familyId) return toast('Crie/Busque família','error'); const name=$('#childNameInput').value.trim(); if(!name) return toast('Digite o nome da criança','error');
+  const {data,error}=await supabaseClient.from('children').insert({family_id:state.familyId,name}).select().single(); if(error) throw error; state.childId=data.id; saveState(); await loadChildrenFromSupabase();}
+
+// Edição de tarefas (v4)
+function openEditTask(task){
+  populateIconSelect(document.getElementById('editIcon'), TASK_ICON_OPTIONS, task.icon||'📌');
+  $('#editTaskId').value=task.id;
+  $('#editTitle').value=task.title||'';
+  $('#editPoints').value=Math.max(1,Math.min(5,parseInt(task.points,10)||1));
+  $('#editFreq').value=task.frequency||'daily';
+  $('#editReward').value=task.rewardType||'money';
+  $('#editIcon').value=task.icon||'📌';
+  $('#editTaskOverlay').classList.add('open');
+}
+function closeEditTask(){ $('#editTaskOverlay').classList.remove('open'); }
+
+// ===== Edição de metas (v5) =====
+function openEditGoal(goal){
+  try{
+    populateIconSelect(document.getElementById('editGoalIcon'), GOAL_ICON_OPTIONS, goal.icon || '🎯');
+    $('#editGoalId').value = goal.id;
+    $('#editGoalTitle').value = goal.title || '';
+    $('#editGoalTarget').value = Math.max(1, parseInt(goal.targetStars,10) || 1);
+    $('#editGoalIcon').value = goal.icon || '🎯';
+    $('#editGoalDelivered').checked = !!goal.delivered;
+    $('#editGoalOverlay').classList.add('open');
+  }catch(e){
+    console.error('[EditGoal] open', e);
+    toast('Erro ao abrir editor da meta','error');
+  }
+}
+function closeEditGoal(){
+  $('#editGoalOverlay').classList.remove('open');
+}
+
+async function updateTaskInSupabase(task){
+  if(!supabaseClient) return true;
+  try{
+    const payload={title:task.title,points:task.points,frequency:task.frequency,icon:task.icon,tint:task.tint,reward_type:task.rewardType};
+    const {error}=await supabaseClient.from('tasks').update(payload).eq('id',task.id);
+    if(!error) return true;
+    const basic={title:task.title,points:task.points,frequency:task.frequency};
+    const r2=await supabaseClient.from('tasks').update(basic).eq('id',task.id);
+    return !r2.error;
+  }catch(e){console.error('[Supabase] update task',e);return false;}
+}
+
+function renderChild(){
+  $('#todayLabel').textContent=formatDateBR();
+  const active=state.childrenList.find(c=>c.id===state.childId);
+  $('#childName').textContent=active?.name||'Criança';
+  const sum=computeSummary();
+  $('#stars').textContent=sum.weekApprovedStars;
+  $('#approved').textContent=sum.weekApprovedCount;
+  const total=sum.todayTotal||1;
+  const pct=Math.round((sum.todayDoneLike/total)*100);
+  $('#bar').style.width=Math.min(100,pct)+'%';
+  $('#progressText').textContent=`${sum.todayDoneLike} de ${total}`;
+  $('#pendingText').textContent=`${sum.pendingCount} aguardando`;
+
+  const root=$('#tasks'); root.innerHTML='';
+  const today=getTodayISO();
+  const cid = activeChildId();
+ const tlist = tasksForChild(cid);
+ const insts = instancesForChild(cid).filter(i=>i.date===today).sort((a,b)=>tlist.findIndex(t=>t.id===a.taskId)-tlist.findIndex(t=>t.id===b.taskId));
+  insts.forEach(inst=>{
+    const task=tlist.find(t=>t.id===inst.taskId); if(!task) return;
+    const row=document.createElement('div'); row.className='task'; row.dataset.tint=task.tint||'mint';
+    const ico=document.createElement('div'); ico.className='ico'; ico.textContent=task.icon||'✅';
+    const mid=document.createElement('div');
+    const title=document.createElement('p'); title.className='title'; title.textContent=task.title;
+    const sub=document.createElement('div'); sub.className='sub';
+    const badgeStars=document.createElement('span'); badgeStars.className='badge'; badgeStars.textContent=`⭐ +${Math.max(1,Math.min(5,task.points||1))}`;
+    const badgeStatus=document.createElement('span'); badgeStatus.className='badge';
+    if(inst.status==='approved'){badgeStatus.classList.add('ok'); badgeStatus.textContent=starString(getInstanceStars(inst,task));}
+    else if(inst.status==='child_marked'){badgeStatus.classList.add('await'); badgeStatus.textContent='Aguardando 👀';}
+    else if(inst.status==='rejected'){badgeStatus.classList.add('rej'); badgeStatus.textContent='Recusada ✖️';}
+    else {badgeStatus.textContent=(task.frequency==='weekly')?'Semanal':'Hoje';}
+    sub.append(badgeStars,badgeStatus); mid.append(title,sub);
+    const btn=document.createElement('button'); btn.className='check'; btn.dataset.state=(inst.status==='child_marked'||inst.status==='approved')?'done':'todo';
+    btn.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true"><path class="tick" d="M20 6L9 17l-5-5"></path></svg>`;
+    btn.addEventListener('click', async ()=>{ if(inst.status==='approved') return; inst.status=(inst.status==='child_marked')?'pending':'child_marked'; inst.approvedStars=null; saveState(); if(supabaseClient) await syncInstanceToSupabase(inst); renderAll(); });
+    row.append(ico,mid,btn); root.appendChild(row);
+  });
+}
+
+function renderGoalsList(){
+  const list=$('#goalsList');
+  const goals=state.goals||[];
+  const total=state.totalGoalStars||0;
+  if(!goals.length){
+    list.innerHTML=`<p style="color:var(--slate);font-size:14px;text-align:center;padding:12px 0">Nenhuma meta cadastrada ainda.</p>`;
+    return;
+  }
+  list.innerHTML='';
+  goals.forEach(goal=>{
+    const target = Math.max(1, parseInt(goal.targetStars,10)||1);
+    const pct=target>0?Math.min(100,Math.round((total/target)*100)):0;
+    const reached=total>=target;
+
+    const div=document.createElement('div');
+    div.style.cssText='padding:12px 0;border-bottom:1px solid rgba(15,15,15,.06)';
+    div.innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:12px">
+        <strong>${esc(goal.icon||'🏆')} ${esc(goal.title)}</strong>
+        <span style="color:${reached?'#21c36b':'rgba(15,15,15,.62)'}">${total}/${target} ⭐</span>
+      </div>
+      <div class="progress" style="margin-top:0"><div style="width:${pct}%;background:${reached?'linear-gradient(90deg,#21c36b,#7ae7b0)':'linear-gradient(90deg,#ff9d2e,#facc15)'}"></div></div>
+      <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="color:var(--slate);font-size:14px">${reached?'🎉 Meta atingida!':`Faltam ${Math.max(0,target-total)} ⭐`}</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+          ${goal.delivered?'<span class="badge ok">Entregue ✅</span>':(reached?'<button class="btn btn-primary" style="height:40px" data-act="deliver">🎁 Marcar entregue</button>':'')}
+          <button class="btn btn-secondary" style="height:40px" data-act="edit">Editar</button>
+          <button class="btn btn-secondary" style="height:40px" data-act="delete">Excluir</button>
+        </div>
+      </div>`;
+
+    const deliverBtn = div.querySelector('[data-act=deliver]');
+    if(deliverBtn){
+      deliverBtn.addEventListener('click', ()=>{
+        if(!confirm('Marcar como entregue?')) return;
+        goal.delivered=true;
+        goal.deliveredAt=new Date().toISOString();
+        saveState();
+        renderAll();
+      });
+    }
+
+    div.querySelector('[data-act=edit]').addEventListener('click', ()=>openEditGoal(goal));
+    div.querySelector('[data-act=delete]').addEventListener('click', ()=>{
+      if(!confirm('Excluir esta meta?')) return;
+      state.goals = (state.goals||[]).filter(g=>g.id!==goal.id);
+      saveState();
+      toast('Meta removida');
+      renderAll();
+    });
+
+    list.appendChild(div);
+  });
+}
+
+function renderChildrenList(){
+  const el=$('#childrenList'); el.innerHTML='';
+  const list=Array.isArray(state.childrenList)?state.childrenList:[];
+  if(!list.length){const p=document.createElement('div'); p.style.cssText='color:var(--slate);font-size:14px'; p.textContent='Nenhuma criança cadastrada ainda.'; el.appendChild(p); return;}
+  list.forEach(child=>{
+    const item=document.createElement('div'); item.className='task'; item.dataset.tint='lav';
+    const ico=document.createElement('div'); ico.className='ico'; ico.textContent='👧';
+    const mid=document.createElement('div');
+    const title=document.createElement('p'); title.className='title'; title.textContent=child.name;
+    const sub=document.createElement('div'); sub.className='sub'; sub.textContent=(child.id===state.childId)?'Criança ativa neste dispositivo':'Toque para ativar';
+    mid.append(title,sub);
+    const btn=document.createElement('button'); btn.className='btn '+(child.id===state.childId?'btn-primary':'btn-secondary'); btn.style.height='40px'; btn.textContent=(child.id===state.childId)?'Ativa':'Ativar';
+    btn.addEventListener('click', async ()=>{ state.childId=child.id; saveState(); toast('Criança ativa: '+child.name,'ok');
+      if(supabaseClient && state.familyId){ await loadTasksFromSupabase().catch(()=>{}); await loadTaskInstancesFromSupabase().catch(()=>{}); await loadGoalsFromSupabase().catch(()=>{}); }
+      ensureInstancesForToday(); renderAll(); });
+    item.append(ico,mid,btn); el.appendChild(item);
+  });
+}
+
+function renderParent(){
+  $('#familyLabel').textContent=state.familyName||'Família';
+  $('#todayLabelParent').textContent=formatDateBR();
+  const sum=computeSummary();
+  $('#kAwait').textContent=sum.pendingCount;
+  $('#kApproved').textContent=sum.weekApprovedCount;
+  $('#kPoints').textContent=sum.weekApprovedStars;
+
+  // approvals
+  const tbody=$('#approvalsBody'); tbody.innerHTML='';
+  const today=getTodayISO();
+  const cid = activeChildId();
+  const ptasks = tasksForChild(cid);
+  const awaiting = instancesForChild(cid).filter(i=>i.date===today && i.status==='child_marked');
+  if(!awaiting.length){const tr=document.createElement('tr'); tr.innerHTML='<td colspan="4" style="color:var(--slate)">Nenhuma pendente hoje.</td>'; tbody.appendChild(tr);} else {
+    awaiting.forEach(inst=>{
+      const task=ptasks.find(t=>t.id===inst.taskId); if(!task) return;
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td><strong>${esc(task.icon||'✅')} ${esc(task.title)}</strong></td><td><div class="starPick"></div></td><td><span class="badge await">Aguardando</span></td><td><button class="btn btn-secondary" style="height:40px" data-act="reject">Recusar</button></td>`;
+      const pick=tr.querySelector('.starPick');
+      const cur=getInstanceStars(inst,task);
+      for(let n=1;n<=5;n++){
+        const b=document.createElement('button'); b.type='button'; b.textContent='★'; b.className=(n<=cur)?'on':'';
+        b.title=`Aprovar com ${n} estrela(s)`;
+        b.addEventListener('click', async ()=>{ inst.status='approved'; inst.approvedStars=n; saveState(); if(supabaseClient) await syncInstanceToSupabase(inst); toast('Aprovada ✅','ok'); renderAll(); });
+        pick.appendChild(b);
+      }
+      tr.querySelector('[data-act=reject]').addEventListener('click', async ()=>{ inst.status='rejected'; inst.approvedStars=null; saveState(); if(supabaseClient) await syncInstanceToSupabase(inst); toast('Recusada ✖️'); renderAll(); });
+      tbody.appendChild(tr);
+    });
+  }
+
+  // week
+  $('#weekApproved').textContent=sum.weekApprovedCount;
+  $('#weekPoints').textContent=sum.weekApprovedStars;
+  $('#weekMoney').textContent=sum.moneyBRL.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  $('#weekGoalStars').textContent=sum.goalStars;
+
+  // tasks list (com editar)
+  const tasksBody=$('#tasksBody'); tasksBody.innerHTML='';
+  tasksForChild(activeChildId()).forEach(t=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td>${esc(t.icon||'✅')}</td>
+      <td>${esc(t.title)}</td>
+      <td>${Math.max(1,Math.min(5,parseInt(t.points,10)||1))}</td>
+      <td>${esc(t.frequency||'daily')}</td>
+      <td>${(t.rewardType||'money')==='goal'?'🏆 Meta':'💰 Dinheiro'}</td>
+      <td>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary" style="height:40px" data-act="edit">Editar</button>
+          <button class="btn btn-secondary" style="height:40px" data-act="delete">Excluir</button>
+        </div>
+      </td>`;
+
+    tr.querySelector('[data-act=edit]').addEventListener('click', ()=>openEditTask(t));
+    tr.querySelector('[data-act=delete]').addEventListener('click', ()=>{ if(!confirm('Excluir esta tarefa?')) return; state.tasks=state.tasks.filter(x=>x.id!==t.id); state.instances=state.instances.filter(i=>i.taskId!==t.id); saveState(); toast('Tarefa removida'); renderAll(); });
+    tasksBody.appendChild(tr);
+  });
+
+  // goals
+  $('#totalGoalStarsEl').textContent=state.totalGoalStars||0;
+  renderGoalsList();
+
+  // settings
+  $('#toggleShowMoney').checked=!!state.showMoneyToChild;
+  $('#settingPointValue').value=parseFloat(state.pointValueBRL)||0.10;
+  $('#settingPointValuePreview').textContent=`10 ⭐ = ${(10*(parseFloat(state.pointValueBRL)||0.10)).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}`;
+  $('#settingParentPinEnabled').checked=!!state.parentPinEnabled;
+  $('#familyNameInput').value=state.familyName||'';
+  $('#childNameInput').value=(state.childrenList.find(c=>c.id===state.childId)?.name)||'';
+  renderChildrenList();
+
+  $('#supabaseUrlInput').value=supabaseConfig.url||'';
+  $('#supabaseAnonInput').value=supabaseConfig.anonKey||'';
+  $('#supabaseConfigStatus').textContent=(supabaseConfig.url && supabaseConfig.anonKey)?'Configuração salva neste dispositivo.':'Supabase não configurado.';
+}
+
+function showMode(mode){ state.mode=mode; saveState(); $('#childPanel').classList.toggle('hidden', mode!=='child'); $('#parentPanel').classList.toggle('hidden', mode!=='parent'); }
+function openPinModal(){ $('#pinOverlay').classList.add('open'); $('#pinInput').value=''; $('#pinInput').focus(); }
+function closePinModal(){ $('#pinOverlay').classList.remove('open'); }
+function unlockParent(){ if(!state.parentPinEnabled){ showMode('parent'); closePinModal(); renderAll(); return; } const pin=$('#pinInput').value.trim(); if(pin!==String(state.parentPin||'')) return toast('PIN incorreto','error'); showMode('parent'); closePinModal(); renderAll(); }
+function openCloudModal(){ $('#cloudOverlay').classList.add('open'); $('#supabaseUrlInput').focus(); }
+function closeCloudModal(){ $('#cloudOverlay').classList.remove('open'); }
+function setParentTab(tab){ const panels={approvals:$('#panelApprovals'),week:$('#panelWeek'),tasks:$('#panelTasks'),goals:$('#panelGoals'),settings:$('#panelSettings')}; Object.entries(panels).forEach(([k,el])=>el.classList.toggle('hidden', k!==tab)); $all('[data-tab]').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab)); }
+
+async function registerWeeklyPayment(){
+ if(!supabaseClient || !state.familyId || !state.childId) return toast('Supabase/família/criança não configurados','error');
+ const cid=activeChildId();
+ const week=getWeekRange();
+ const approved=instancesForChild(cid).filter(i=>i.date>=week.start && i.date<=week.end && i.status==='approved');
+ const tmap=new Map(tasksForChild(cid).map(t=>[t.id,t]));
+ const totalStars=approved.reduce((sum,inst)=>{const task=tmap.get(inst.taskId); return sum+(task?getInstanceStars(inst,task):0);},0);
+ if(!totalStars) return toast('Sem ⭐ aprovadas na semana','error');
+ const payload={family_id:state.familyId, child_id:state.childId, week_start_date:week.start, week_end_date:week.end, total_points:totalStars, paid_at:new Date().toISOString()};
+ const {error}=await supabaseClient.from('weekly_payments').upsert(payload,{onConflict:'family_id,child_id,week_start_date,week_end_date'});
+ if(error) throw error;
+ state.weekPaid=true; saveState();
+}
+
+
+// PIX + Reviews
+const PROJECT_ID='kidstasks';
+const PIX_KEY='4c6086a2-4bb8-474b-a4cf-ced8c8d82189';
+const PIX_NAME='MGC Dev';
+const PIX_CITY='Sao Raimundo';
+const REV_SB_URL='https://qvddbmlhucxndvbakvyd.supabase.co';
+const REV_SB_KEY='sb_publishable_0Saq2ZYXgGEApcbvWAahtw_VQ9b9iTq';
+let revClient=null;
+function initRevClient(){ try{ if(window.supabase && typeof window.supabase.createClient==='function') revClient=window.supabase.createClient(REV_SB_URL, REV_SB_KEY); }catch(e){ console.error('[Reviews] init', e);} }
+function pixEmv(key,name,city,amount){
+  const f=(id,val)=>{const v=String(val);return id+String(v.length).padStart(2,'0')+v;};
+  const mai=f('26',f('00','BR.GOV.BCB.PIX')+f('01',key));
+  const adf=f('62',f('05','***'));
+  let emv=f('00','01')+mai+f('52','0000')+f('53','986')+(amount && parseFloat(amount)>0?f('54',parseFloat(amount).toFixed(2)):'')+f('58','BR')+f('59',name.slice(0,25))+f('60',city.slice(0,15))+adf+'6304';
+  let crc=0xFFFF;
+  for(let i=0;i<emv.length;i++){ crc^=emv.charCodeAt(i)<<8; for(let j=0;j<8;j++){ crc=(crc & 0x8000)?((crc<<1)^0x1021):(crc<<1); crc &=0xFFFF; } }
+  return emv+crc.toString(16).toUpperCase().padStart(4,'0');
+}
+let _pixCode='';
+function openPixModal(){
+  $('#pixOverlay').classList.add('open');
+  _pixCode=pixEmv(PIX_KEY,PIX_NAME,PIX_CITY,'');
+  const container=$('#pixQrContainer');
+  const encoded=encodeURIComponent(_pixCode);
+  const qr1='https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=4&data='+encoded;
+  const qr2='https://chart.googleapis.com/chart?chs=200x200&cht=qr&choe=UTF-8&chl='+encoded;
+  container.innerHTML=`<img id="pixQrImg" src="${qr1}" width="200" height="200" style="border-radius:12px;background:#fff;padding:8px;display:block;margin:0 auto" alt="QR Code PIX"/>
+  <p id="pixQrFallback" style="display:none;color:var(--slate);font-size:14px;text-align:center;margin-top:8px">Copie o código abaixo para pagar.</p>`;
+  const img=$('#pixQrImg');
+  img.onerror=function(){ this.src=qr2; this.onerror=function(){ this.style.display='none'; $('#pixQrFallback').style.display='block'; }; };
+}
+function closePixModal(){ $('#pixOverlay').classList.remove('open'); }
+async function copyPixCode(){
+  const btn=$('#pixCopyBtn');
+  try{ await navigator.clipboard.writeText(_pixCode); btn.textContent='✅ Copiado!'; setTimeout(()=>btn.textContent='Copiar código PIX',2000); }
+  catch(e){ const tmp=document.createElement('textarea'); tmp.value=_pixCode; document.body.appendChild(tmp); tmp.select(); document.execCommand('copy'); document.body.removeChild(tmp); btn.textContent='✅ Copiado!'; setTimeout(()=>btn.textContent='Copiar código PIX',2000); }
+}
+
+let localReviews=(()=>{ try{ return JSON.parse(localStorage.getItem('ktm_reviews')||'[]'); }catch(e){ return []; }})();
+let sharedReviews=[];
+function mergeReviews(local,shared){ const map=new Map(); [...shared,...local].forEach(r=>map.set(r.id,r)); return [...map.values()].sort((a,b)=>new Date(b.ts||0)-new Date(a.ts||0)); }
+async function loadSharedReviews(){ if(!revClient) return; const {data,error}=await revClient.from('app_reviews').select('*').eq('project_id',PROJECT_ID).order('ts',{ascending:false}).limit(200); if(!error && data) sharedReviews=data; }
+async function pushReviewToCloud(review){ if(!revClient) return {ok:false,reason:'revClient nulo'}; const {error}=await revClient.from('app_reviews').insert({id:review.id,project_id:PROJECT_ID,name:review.name,comment:review.comment,stars:review.stars,donated:review.donated,date:review.date,ts:review.ts}); if(error) return {ok:false,reason:error.message}; return {ok:true}; }
+function renderReviewsList(){
+  const merged=mergeReviews(localReviews,sharedReviews);
+  const list=$('#reviewsList');
+  if(!merged.length){ list.innerHTML='<p style="color:var(--slate);font-size:14px;text-align:center">Nenhuma avaliação ainda.</p>'; return; }
+  list.innerHTML=merged.map(r=>{ const stars='★'.repeat(r.stars||0)+'☆'.repeat(5-(r.stars||0)); const badge=r.donated?'☕ Apoiador':''; return `
+    <div style="border-bottom:1px solid rgba(15,15,15,.06);padding:10px 0">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
+        <span style="font-weight:600">${esc(r.name||'Anônimo')} ${badge?`<span style="font-size:12px;color:#ff9d2e">${badge}</span>`:''}</span>
+        <span style="color:#facc15">${stars}</span>
+      </div>
+      ${r.comment?`<div style="color:var(--slate);font-size:14px;margin-top:4px">${esc(r.comment)}</div>`:''}
+      <div style="color:var(--muted);font-size:12px;margin-top:4px">${esc(r.date||'')}</div>
+    </div>`; }).join('');
+}
+async function openReviewsModal(mode='list'){
+  if(!revClient) initRevClient();
+  $('#reviewsOverlay').classList.add('open');
+  $('#reviewListMode').classList.toggle('hidden', mode!=='list');
+  $('#reviewFormMode').classList.toggle('hidden', mode!=='form');
+  $('#reviewThankYou').classList.add('hidden');
+  if(mode==='list'){ $('#reviewsList').innerHTML='<p style="color:var(--slate);font-size:14px;text-align:center">Carregando...</p>'; await loadSharedReviews(); renderReviewsList(); }
+  if(mode==='form'){ setReviewStar(0); $('#reviewNameInput').value=''; $('#reviewCommentInput').value=''; $('#reviewDonatedCheck').checked=true; }
+}
+function closeReviewsModal(){ $('#reviewsOverlay').classList.remove('open'); }
+function setReviewStar(n){ $('#reviewStarInput').value=n; $all('.star-btn').forEach((btn,i)=> btn.style.color = i<n ? '#facc15' : '#4b5563'); }
+async function submitReview(){
+  const stars=parseInt($('#reviewStarInput').value||'0',10);
+  const name=$('#reviewNameInput').value.trim();
+  const comment=$('#reviewCommentInput').value.trim();
+  const donated=$('#reviewDonatedCheck').checked;
+  if(!stars) return toast('Selecione 1 a 5 estrelas','error');
+  if(!name) return toast('Digite seu nome','error');
+  const now=new Date();
+  const review={id:`${PROJECT_ID}_${now.getTime()}_${Math.random().toString(36).slice(2,7)}`,name,comment,stars,donated,date:now.toLocaleDateString('pt-BR'),ts:now.toISOString()};
+  localReviews=[review,...localReviews];
+  try{ localStorage.setItem('ktm_reviews', JSON.stringify(localReviews)); }catch(e){}
+  const result=await pushReviewToCloud(review);
+  $('#reviewFormMode').classList.add('hidden');
+  $('#reviewThankYou').classList.remove('hidden');
+  $('#reviewThankYouMsg').textContent = result.ok ? '✅ Avaliação sincronizada!' : `⚠️ Salvo só neste dispositivo. Motivo: ${result.reason||'desconhecido'}`;
+}
+
+function renderAll(){ ensureInstancesForToday(); renderChild(); renderParent(); }
+
+function bindEvents(){
+  // top
+  $('#btnChild').addEventListener('click', ()=>{ showMode('child'); renderAll(); });
+  $('#btnParent').addEventListener('click', openPinModal);
+  $('#goParentDash').addEventListener('click', openPinModal);
+
+  // pin
+  $('#pinClose').addEventListener('click', closePinModal);
+  $('#pinUnlock').addEventListener('click', unlockParent);
+  $('#pinOverlay').addEventListener('click', (e)=>{ if(e.target.id==='pinOverlay') closePinModal(); });
+  $('#pinInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') unlockParent(); if(e.key==='Escape') closePinModal(); });
+
+  // tabs
+  $all('[data-tab]').forEach(b=>b.addEventListener('click', ()=>setParentTab(b.dataset.tab)));
+
+  // add task
+  $('#addTaskForm').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const icon=$('#fIcon').value||'✅';
+    const title=$('#fTitle').value.trim();
+    const points=Math.max(1,Math.min(5,parseInt($('#fPoints').value,10)||1));
+    const frequency=$('#fFreq').value;
+    const rewardType=$('#fReward').value;
+    if(!title) return toast('Digite o nome da tarefa','error');
+    const tint=['mint','peach','yellow','sky','lav'][Math.floor(Math.random()*5)];
+    const task={id:'t'+Math.random().toString(36).slice(2,9),title,icon,tint,points,frequency,rewardType,childId:activeChildId()};
+    if(supabaseClient && state.familyId){
+      try{
+        const payload={title,points,frequency,family_id:state.familyId,icon,tint,reward_type:rewardType};
+        if(state.childId) payload.child_id=state.childId;
+        const {data,error}=await supabaseClient.from('tasks').insert(payload).select().single();
+        if(error){
+          const basic={title,points,frequency,family_id:state.familyId};
+          if(state.childId) basic.child_id=state.childId;
+          const r2=await supabaseClient.from('tasks').insert(basic).select().single();
+          if(!r2.error && r2.data?.id) task.id=r2.data.id;
+        } else if(data?.id){
+          task.id=data.id;
+        }
+      }catch(err){}
+    }
+    state.tasks.push(task); saveState(); ensureInstancesForToday(); e.target.reset();
+    populateIconSelect(document.getElementById('fIcon'), TASK_ICON_OPTIONS, '📌');
+    toast('Tarefa adicionada','ok');
+    renderAll();
+  });
+
+  // edit task modal
+  $('#editCancel').addEventListener('click', closeEditTask);
+  $('#editTaskOverlay').addEventListener('click', (e)=>{ if(e.target.id==='editTaskOverlay') closeEditTask(); });
+  $('#editTaskForm').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const id=$('#editTaskId').value;
+    const task=state.tasks.find(x=>String(x.id)===String(id));
+    if(!task) return;
+    const newTitle=$('#editTitle').value.trim();
+    if(!newTitle) return toast('Digite o nome da tarefa','error');
+    task.title=newTitle;
+    task.points=Math.max(1,Math.min(5,parseInt($('#editPoints').value,10)||1));
+    task.frequency=$('#editFreq').value;
+    task.rewardType=$('#editReward').value;
+    task.icon=$('#editIcon').value||task.icon||'📌';
+    saveState();
+    if(supabaseClient && state.familyId){
+      const ok=await updateTaskInSupabase(task);
+      if(!ok) toast('Salvo localmente (falha ao sincronizar)','error');
+    }
+    closeEditTask();
+    toast('Tarefa atualizada ✅','ok');
+    ensureInstancesForToday();
+    renderAll();
+  });
+
+  // add goal
+  $('#newGoalForm').addEventListener('submit', async (e)=>{
+ e.preventDefault();
+ const icon=$('#newGoalIcon').value||'🏆';
+ const title=$('#newGoalTitle').value.trim();
+ const target=Math.max(1,parseInt($('#newGoalTarget').value,10)||1);
+ if(!title) return toast('Digite o nome da meta','error');
+ state.goals ||= [];
+ const goal={id:'g'+Date.now(),title,icon,targetStars:target,delivered:false,deliveredAt:null,childId:activeChildId()};
+ if(supabaseClient && state.familyId && state.childId){
+   try{ const newId = await createGoalInSupabase({title:goal.title,icon:goal.icon,targetStars:goal.targetStars,delivered:goal.delivered,deliveredAt:goal.deliveredAt}); if(newId) goal.id=newId; }
+   catch(err){ console.error('[Supabase] create goal',err); toast('Meta salva localmente (falha ao sincronizar)','error'); }
+ }
+ state.goals.push(goal);
+ saveState();
+ e.target.reset();
+ populateIconSelect(document.getElementById('newGoalIcon'), GOAL_ICON_OPTIONS, '🎯');
+ toast('Meta adicionada','ok');
+ renderAll();
+});
+
+  // payment
+  $('#btnPaid').addEventListener('click', async ()=>{ try{ await registerWeeklyPayment(); toast('Pagamento registrado ✅','ok'); renderAll(); } catch(e){ toast('Erro ao registrar pagamento','error'); } });
+
+  // pix/reviews
+  $('#btnPix').addEventListener('click', openPixModal);
+  $('#btnReviews').addEventListener('click', ()=>openReviewsModal('list'));
+  $('#pixClose').addEventListener('click', closePixModal);
+  $('#pixOverlay').addEventListener('click', (e)=>{ if(e.target.id==='pixOverlay') closePixModal(); });
+  $('#pixCopyBtn').addEventListener('click', copyPixCode);
+  $('#pixToReview').addEventListener('click', ()=>{ closePixModal(); openReviewsModal('form'); });
+  $('#reviewsClose').addEventListener('click', closeReviewsModal);
+  $('#reviewsOverlay').addEventListener('click', (e)=>{ if(e.target.id==='reviewsOverlay') closeReviewsModal(); });
+  $all('.star-btn').forEach((b,i)=>b.addEventListener('click', ()=>setReviewStar(i+1)));
+  $('#submitReviewBtn').addEventListener('click', submitReview);
+  $('#backToListBtn').addEventListener('click', ()=>openReviewsModal('list'));
+  $('#reviewListToPixBtn').addEventListener('click', ()=>{ closeReviewsModal(); openPixModal(); });
+
+  // settings
+  $('#toggleShowMoney').addEventListener('change', (e)=>{ state.showMoneyToChild=e.target.checked; saveState(); toast('Salvo','ok'); });
+  $('#settingPointValueSaveBtn').addEventListener('click', ()=>{ const v=parseFloat($('#settingPointValue').value); if(!v||v<=0) return toast('Digite um valor válido','error'); state.pointValueBRL=v; saveState(); toast('Taxa salva','ok'); renderAll(); });
+  $('#settingParentPinSaveBtn').addEventListener('click', ()=>{ const enabled=$('#settingParentPinEnabled').checked; const pin=$('#settingParentPinInput').value.trim();
+    if(enabled){ if(!pin||pin.length<4) return toast('PIN deve ter 4+ dígitos','error'); state.parentPinEnabled=true; state.parentPin=pin; }
+    else { state.parentPinEnabled=false; state.parentPin=''; }
+    saveState(); toast('PIN atualizado','ok'); });
+
+  // cloud modal
+  $('#cloudBtn').addEventListener('click', openCloudModal);
+  $('#cloudClose').addEventListener('click', closeCloudModal);
+  $('#cloudOverlay').addEventListener('click', (e)=>{ if(e.target.id==='cloudOverlay') closeCloudModal(); });
+  $('#supabaseRemoveBtn').addEventListener('click', ()=>{ if(!confirm('Remover configuração do Supabase?')) return; saveSupabaseConfig('',''); initSupabaseClient(); toast('Config removida'); renderAll(); });
+  $('#supabaseTestBtn').addEventListener('click', async ()=>{ const url=$('#supabaseUrlInput').value.trim(); const anon=$('#supabaseAnonInput').value.trim();
+    try{ const c=window.supabase.createClient(url,anon); const {error}=await c.from('tasks').select('id').limit(1); if(error) throw error; toast('Conexão OK','ok'); }
+    catch(e){ toast('Falha: '+(e.message||'erro'),'error'); }
+  });
+  $('#supabaseSaveBtn').addEventListener('click', async ()=>{ const url=$('#supabaseUrlInput').value.trim(); const anon=$('#supabaseAnonInput').value.trim();
+    saveSupabaseConfig(url,anon); initSupabaseClient();
+    if(supabaseClient){
+      try{ if(!state.familyId) await loadFamilyFromSupabase().catch(()=>{});
+        if(state.familyId){ await loadChildrenFromSupabase().catch(()=>{}); await loadTasksFromSupabase().catch(()=>{}); await loadTaskInstancesFromSupabase().catch(()=>{}); await loadGoalsFromSupabase().catch(()=>{}); }
+        ensureInstancesForToday(); setCloudStatus('connected','Supabase conectado'); toast('Supabase conectado','ok');
+      }catch(e){ setCloudStatus('error','Erro ao sincronizar'); toast('Erro ao sincronizar','error'); }
+    }
+    renderAll(); closeCloudModal();
+  });
+
+  // family/children
+  $('#familyCreateBtn').addEventListener('click', async ()=>{ try{ await createFamilyOnly(); toast('Família criada','ok'); }catch(e){ toast('Erro ao criar família','error'); } renderAll(); });
+  $('#loadFamilyBtn').addEventListener('click', async ()=>{ if(!supabaseClient) return toast('Configure o Supabase','error');
+    try{ await loadFamilyFromSupabase(); await loadChildrenFromSupabase(); await loadTasksFromSupabase(); await loadTaskInstancesFromSupabase(); ensureInstancesForToday(); toast('Família carregada','ok'); }
+    catch(e){ toast('Erro ao buscar família','error'); }
+    renderAll();
+  });
+  $('#childCreateBtn').addEventListener('click', async ()=>{ try{ await createChildOnly(); toast('Criança adicionada','ok'); }catch(e){ toast('Erro ao adicionar criança','error'); } ensureInstancesForToday(); renderAll(); });
+  $('#refreshChildrenBtn').addEventListener('click', async ()=>{ try{ await loadChildrenFromSupabase(); toast('Lista atualizada','ok'); }catch(e){ toast('Erro ao atualizar','error'); } renderAll(); });
+}
+
+function init(){
+  initSupabaseClient();
+  initRevClient();
+  populateIconSelect(document.getElementById('fIcon'), TASK_ICON_OPTIONS, '📌');
+  populateIconSelect(document.getElementById('editIcon'), TASK_ICON_OPTIONS, '📌');
+  populateIconSelect(document.getElementById('newGoalIcon'), GOAL_ICON_OPTIONS, '🎯');
+  showMode('child');
+  setParentTab('approvals');
+  bindEvents();
+  renderAll();
+
+  // Supabase sync on load
+  (async ()=>{
+    if(!supabaseClient) return;
+    try{
+      if(!state.familyId) await loadFamilyFromSupabase().catch(()=>{});
+      if(state.familyId){
+        await loadChildrenFromSupabase().catch(()=>{});
+        await loadTasksFromSupabase().catch(()=>{});
+        await loadTaskInstancesFromSupabase().catch(()=>{});
+        await loadGoalsFromSupabase().catch(()=>{});
+        ensureInstancesForToday();
+        setCloudStatus('connected','Supabase sincronizado');
+        renderAll();
+      }
+    }catch(e){ setCloudStatus('error','Erro no Supabase'); }
+  })();
+
+  // Versão automática via CHANGELOG.md
+  (async()=>{
+    const el=document.getElementById('appVersion'); if(!el) return;
+    const CACHE_KEY='kidstasks_app_version', CACHE_TTL=6*60*60*1000;
+    const cached=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
+    if(cached && Date.now()-cached.ts<CACHE_TTL){ el.textContent='© MGC · '+cached.v; return; }
+    try{
+      const res=await fetch('./CHANGELOG.md?_='+Date.now(),{cache:'no-cache'});
+      if(!res.ok) return;
+      const match=(await res.text()).match(/##\s+\[(\d+\.\d+\.\d+)\]/);
+      if(!match) return;
+      const v='v'+match[1]; el.textContent='© MGC · '+v;
+      localStorage.setItem(CACHE_KEY,JSON.stringify({v,ts:Date.now()}));
+    }catch(e){}
+  })();
+
+  // Banner de nova versão via Supabase app_config
+  (async()=>{
+    if(!revClient) return;
+    const LOCAL_VERSION='2.0.0';
+    const CACHE_KEY='kidstasks_update_check', CACHE_TTL=24*60*60*1000;
+    const cached=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
+    if(cached && Date.now()-cached.ts<CACHE_TTL) return;
+    try{
+      const {data,error}=await revClient.from('app_config').select('value').eq('project_id',PROJECT_ID).eq('key','version').single();
+      if(error||!data) return;
+      localStorage.setItem(CACHE_KEY,JSON.stringify({ts:Date.now()}));
+      const remote=data.value.replace(/^v/,'');
+      const parse=v=>v.split('.').map(Number);
+      const [ra,rb,rc]=parse(remote); const [la,lb,lc]=parse(LOCAL_VERSION);
+      const isNewer=ra>la||(ra===la&&rb>lb)||(ra===la&&rb===lb&&rc>lc);
+      if(!isNewer) return;
+      const banner=document.createElement('div');
+      banner.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a73e8;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:10px 16px;font-size:14px;gap:12px;';
+      banner.innerHTML=`<span>🆕 Nova versão disponível (v${remote}) — recarregue para atualizar.</span>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button onclick="location.reload(true)" style="background:#fff;color:#1a73e8;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;font-weight:600">Recarregar</button>
+          <button onclick="this.parentElement.parentElement.remove()" style="background:transparent;color:#fff;border:none;font-size:18px;cursor:pointer;line-height:1">✕</button>
+        </div>`;
+      document.body.prepend(banner);
+    }catch(e){}
+  })();
+
+  // Service Worker
+  if('serviceWorker' in navigator && location.protocol !== 'file:'){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('./sw.js').catch(e=>console.error('SW',e));
+    });
+  }
+}
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
