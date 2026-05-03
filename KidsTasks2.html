@@ -159,6 +159,14 @@
           </div>
         </aside>
       </div>
+
+      <section class="card hidden" id="childGoalsCard" style="margin-top:16px">
+        <div class="hd">
+          <h2>🏆 Minhas Conquistas</h2>
+          <div class="meta"><span id="childGoalStarsTotal">0</span> ⭐ acumuladas</div>
+        </div>
+        <div class="bd" id="childGoalsList"></div>
+      </section>
     </section>
 
     <section id="parentPanel" class="hidden">
@@ -1076,6 +1084,49 @@ function renderChild(){
     row.append(ico,mid,actionEl); root.appendChild(row);
   });
   if(hasRunningTimer) startGlobalTick(); else stopGlobalTick();
+  renderChildGoals();
+}
+
+function renderChildGoals(){
+  const cid=activeChildId();
+  const goals=goalsForChild(cid);
+  const total=state.totalGoalStars||0;
+  const card=$('#childGoalsCard');
+  const list=$('#childGoalsList');
+  const starsEl=$('#childGoalStarsTotal');
+  if(!card||!list) return;
+  if(!goals.length){ card.classList.add('hidden'); return; }
+  card.classList.remove('hidden');
+  if(starsEl) starsEl.textContent=total;
+  list.innerHTML='';
+  goals.forEach(goal=>{
+    const target=Math.max(1,parseInt(goal.targetStars,10)||1);
+    const pct=Math.min(100,Math.round((total/target)*100));
+    const reached=total>=target;
+    const div=document.createElement('div');
+    div.style.cssText='padding:12px 0;border-bottom:1px solid rgba(15,15,15,.06)';
+    const barColor=goal.delivered
+      ?'background:linear-gradient(90deg,#6b7280,#9ca3af)'
+      :reached
+        ?'background:linear-gradient(90deg,#21c36b,#7ae7b0)'
+        :'background:linear-gradient(90deg,#ff9d2e,#facc15)';
+    let statusHtml='';
+    if(goal.delivered){
+      statusHtml='<span style="font-size:14px;color:#21c36b;font-weight:600">✅ Recompensa entregue!</span>';
+    } else if(reached){
+      statusHtml='<span style="font-size:14px;color:#21c36b;font-weight:600">🎉 Meta atingida! Fale com o responsável.</span>';
+    } else {
+      statusHtml=`<span style="font-size:14px;color:var(--slate)">Faltam ${Math.max(0,target-total)} ⭐</span>`;
+    }
+    div.innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:12px">
+        <strong style="font-size:16px">${esc(goal.icon||'🏆')} ${esc(goal.title)}</strong>
+        <span style="font-size:14px;color:var(--slate);white-space:nowrap">${total}/${target} ⭐</span>
+      </div>
+      <div class="progress" style="margin:0 0 8px"><div style="width:${pct}%;height:100%;${barColor};transition:width .3s ease"></div></div>
+      ${statusHtml}`;
+    list.appendChild(div);
+  });
 }
 
 function renderGoalsList(){
