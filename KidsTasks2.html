@@ -854,6 +854,7 @@ const defaultState={
   showMoneyToChild:false,
   weekPaid:false,
   lastWeekStart:'',
+  weekHistory:[],
   totalGoalStars:0,
   goals:[],
   tasks:[
@@ -933,13 +934,24 @@ function ensureInstancesForToday(){
   const today=getTodayISO();
   const week=getWeekRange();
 
-  // Detecta virada de semana — reseta tudo da semana anterior
-  const hasOldInstances = (state.instances||[]).some(i => i.date < week.start);
-  if(state.lastWeekStart !== week.start || hasOldInstances){
-    state.lastWeekStart = week.start;
-    state.weekPaid = false;
-    // Remove TODAS as instâncias anteriores ao início desta semana
-    state.instances = (state.instances||[]).filter(i => i.date >= week.start);
+  // Detecta virada de semana — arquiva e reseta
+  const hasOldInstances=(state.instances||[]).some(i=>i.date<week.start);
+  if(state.lastWeekStart!==week.start || hasOldInstances){
+    // Snapshot das instâncias antigas ANTES do cleanup (necessário para arquivar)
+    const oldInstances=(state.instances||[]).filter(i=>i.date<week.start);
+
+    if(oldInstances.length && state.lastWeekStart && state.lastWeekStart!==week.start){
+      // Calcula a semana anterior (lastWeekStart → dia anterior a week.start)
+      const prevEnd=new Date(week.start);
+      prevEnd.setDate(prevEnd.getDate()-1);
+      archiveWeek(state.lastWeekStart, prevEnd.toISOString().slice(0,10), oldInstances)
+        .catch(e=>console.error('[Archive]',e));
+    }
+
+    state.lastWeekStart=week.start;
+    state.weekPaid=false;
+    // Limpa TODAS as instâncias anteriores a esta semana
+    state.instances=(state.instances||[]).filter(i=>i.date>=week.start);
     saveState();
   }
 
@@ -1558,6 +1570,66 @@ function openCloudModal(){ $('#cloudOverlay').classList.add('open'); $('#supabas
 function closeCloudModal(){ $('#cloudOverlay').classList.remove('open'); }
 function setParentTab(tab){ const panels={approvals:$('#panelApprovals'),week:$('#panelWeek'),tasks:$('#panelTasks'),goals:$('#panelGoals'),settings:$('#panelSettings')}; Object.entries(panels).forEach(([k,el])=>el.classList.toggle('hidden', k!==tab)); $all('[data-tab]').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab)); }
 
+// ── Arquivo de semana anterior (chamado na virada de semana) ──
+async function archiveWeek(prevWeekStart, prevWeekEnd, oldInstances){
+  if(!prevWeekStart || !prevWeekEnd || !oldInstances.length) return;
+  if(!state.weekHistory) state.weekHistory=[];
+  const rate=parseFloat(state.pointValueBRL)||0.10;
+
+  // Arquiva para cada criança que tem instâncias na semana anterior
+  const children=state.childrenList.length
+    ? state.childrenList
+    : [{id:activeChildId(), name:state.childrenList[0]?.name||'Criança'}];
+
+  for(const child of children){
+    const cid=child.id; if(!cid) continue;
+    // Evita duplicar se já arquivou esta semana para esta criança
+    if(state.weekHistory.some(h=>h.childId===cid && h.weekStart===prevWeekStart)) continue;
+
+    const childTasks=tasksForChild(cid);
+    const tmap=new Map(childTasks.map(t=>[t.id,t]));
+    const approved=oldInstances.filter(i=>i.childId===cid && i.status==='approved' && i.date>=prevWeekStart && i.date<=prevWeekEnd);
+    if(!approved.length) continue;
+
+    let totalStars=0, moneyStars=0, goalStars=0;
+    approved.forEach(inst=>{
+      const task=tmap.get(inst.taskId); if(!task) return;
+      const s=getInstanceStars(inst,task); totalStars+=s;
+      const rt=task.rewardType||'money';
+      if(rt==='money'||rt==='both') moneyStars+=s;
+      if(rt==='goal'||rt==='both') goalStars+=s;
+    });
+
+    const entry={
+      id:`hist_${cid}_${prevWeekStart}`,
+      childId:cid,
+      childName:child.name||'Criança',
+      weekStart:prevWeekStart,
+      weekEnd:prevWeekEnd,
+      totalStars,
+      moneyBRL:moneyStars*rate,
+      goalStars,
+      tasksApproved:approved.length,
+      paid:false,
+      paidAt:null
+    };
+    state.weekHistory.unshift(entry); // mais recente primeiro
+
+    // Salva no Supabase weekly_payments
+    if(supabaseClient && state.familyId){
+      try{
+        await supabaseClient.from('weekly_payments').upsert({
+          family_id:state.familyId, child_id:cid,
+          week_start_date:prevWeekStart, week_end_date:prevWeekEnd,
+          total_points:totalStars, goal_stars:goalStars
+          // paid_at: null (não pago ainda)
+        },{onConflict:'family_id,child_id,week_start_date,week_end_date'});
+      }catch(e){ console.error('[Archive] weekly_payments',e); }
+    }
+  }
+  saveState();
+}
+
 async function registerWeeklyPayment(){
  if(!supabaseClient || !state.familyId || !state.childId) return toast('Supabase/família/criança não configurados','error');
  const cid=activeChildId();
@@ -1566,10 +1638,23 @@ async function registerWeeklyPayment(){
  const tmap=new Map(tasksForChild(cid).map(t=>[t.id,t]));
  const totalStars=approved.reduce((sum,inst)=>{const task=tmap.get(inst.taskId); return sum+(task?getInstanceStars(inst,task):0);},0);
  if(!totalStars) return toast('Sem ⭐ aprovadas na semana','error');
- const payload={family_id:state.familyId, child_id:state.childId, week_start_date:week.start, week_end_date:week.end, total_points:totalStars, paid_at:new Date().toISOString()};
+ let goalStars=0;
+ approved.forEach(inst=>{const task=tmap.get(inst.taskId); if(!task) return; const rt=task.rewardType||'money'; if(rt==='goal'||rt==='both') goalStars+=getInstanceStars(inst,task);});
+ const paidAt=new Date().toISOString();
+ const payload={family_id:state.familyId, child_id:state.childId, week_start_date:week.start, week_end_date:week.end, total_points:totalStars, goal_stars:goalStars, paid_at:paidAt};
  const {error}=await supabaseClient.from('weekly_payments').upsert(payload,{onConflict:'family_id,child_id,week_start_date,week_end_date'});
  if(error) throw error;
- state.weekPaid=true; saveState();
+ state.weekPaid=true;
+ // Atualiza histórico local se existir entrada
+ if(state.weekHistory){
+   const entry=state.weekHistory.find(h=>h.childId===cid && h.weekStart===week.start);
+   if(entry){ entry.paid=true; entry.paidAt=paidAt; }
+   else{
+     const rate=parseFloat(state.pointValueBRL)||0.10;
+     state.weekHistory.unshift({id:`hist_${cid}_${week.start}`,childId:cid,childName:(state.childrenList.find(c=>c.id===cid)?.name)||'Criança',weekStart:week.start,weekEnd:week.end,totalStars,moneyBRL:(totalStars-goalStars)*rate,goalStars,tasksApproved:approved.length,paid:true,paidAt});
+   }
+ }
+ saveState();
 }
 
 
