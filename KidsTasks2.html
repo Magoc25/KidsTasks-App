@@ -1565,7 +1565,17 @@ function renderParent(){
       </td>`;
 
     tr.querySelector('[data-act=edit]').addEventListener('click', ()=>openEditTask(t));
-    tr.querySelector('[data-act=delete]').addEventListener('click', ()=>{ if(!confirm('Excluir esta tarefa?')) return; state.tasks=state.tasks.filter(x=>x.id!==t.id); state.instances=state.instances.filter(i=>i.taskId!==t.id); saveState(); toast('Tarefa removida'); renderAll(); });
+    tr.querySelector('[data-act=delete]').addEventListener('click', async ()=>{
+      if(!confirm('Excluir esta tarefa?')) return;
+      state.tasks=state.tasks.filter(x=>x.id!==t.id);
+      state.instances=state.instances.filter(i=>i.taskId!==t.id);
+      saveState(); renderAll();
+      // Remove do Supabase se for tarefa com UUID
+      if(supabaseClient && isUuidLike(String(t.id))){
+        try{ await supabaseClient.from('tasks').delete().eq('id',t.id); toast('Tarefa removida ✅','ok'); }
+        catch(e){ toast('Removida local; falha no Supabase','error'); }
+      } else { toast('Tarefa removida ✅','ok'); }
+    });
     tasksBody.appendChild(tr);
   });
 
