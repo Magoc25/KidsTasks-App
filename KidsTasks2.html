@@ -435,6 +435,18 @@
             </div>
           </div>
 
+          <div class="card" style="box-shadow:none;background:var(--surface);margin-bottom:12px">
+            <div class="bd">
+              <h3 style="margin:0 0 6px;font-size:16px">💾 Backup local</h3>
+              <p style="font-size:13px;color:var(--slate);margin:0 0 10px">Exporte os dados como cópia de segurança ou para transferir entre dispositivos (arquivo .json).</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-secondary" id="btnExportBackup" type="button">⬇️ Exportar JSON</button>
+                <button class="btn btn-secondary" id="btnImportBackup" type="button">⬆️ Importar JSON</button>
+              </div>
+              <input type="file" id="importBackupInput" accept=".json" style="display:none"/>
+            </div>
+          </div>
+
           <div class="card" style="box-shadow:none;background:var(--surface)">
             <div class="bd">
               <h3 style="margin:0 0 10px;font-size:16px">PIN do responsável</h3>
@@ -1033,6 +1045,7 @@ function computeSummary(){
 // Supabase
 let supabaseClient=null;
 let supabaseConfig={url:'',anonKey:''};
+let _lastLocalChange=0; // timestamp da última ação local (evita race condition com polling)
 function loadSupabaseConfig(){try{return {url:localStorage.getItem(SUPABASE_URL_KEY)||'',anonKey:localStorage.getItem(SUPABASE_ANON_KEY)||''};}catch(e){return {url:'',anonKey:''};}}
 function saveSupabaseConfig(url,anonKey){try{if(url) localStorage.setItem(SUPABASE_URL_KEY,url); else localStorage.removeItem(SUPABASE_URL_KEY);
   if(anonKey) localStorage.setItem(SUPABASE_ANON_KEY,anonKey); else localStorage.removeItem(SUPABASE_ANON_KEY);}catch(e){}}
@@ -1042,6 +1055,23 @@ function initSupabaseClient(){supabaseConfig=loadSupabaseConfig();
     try{supabaseClient=window.supabase.createClient(supabaseConfig.url,supabaseConfig.anonKey);setCloudStatus('connected','Supabase conectado');}
     catch(e){supabaseClient=null;setCloudStatus('error','Falha ao criar client');}
   }else{supabaseClient=null;setCloudStatus('disconnected','Supabase não configurado');}
+}
+
+let _realtimeChannel=null;
+function setupRealtime(){
+  if(!supabaseClient || !state.familyId) return;
+  if(_realtimeChannel){ try{supabaseClient.removeChannel(_realtimeChannel);}catch(e){} _realtimeChannel=null; }
+  try{
+    _realtimeChannel=supabaseClient.channel('kt_sync_'+state.familyId)
+      .on('postgres_changes',{event:'*',schema:'public',table:'task_instances',filter:`family_id=eq.${state.familyId}`},
+        async ()=>{
+          // Ignora eventos originados neste dispositivo (janela de 8s após ação local)
+          if(Date.now()-_lastLocalChange < 8000) return;
+          if(!supabaseClient || !state.familyId || !state.childId) return;
+          try{ await loadTaskInstancesFromSupabase(); renderAll(); }catch(e){}
+        })
+      .subscribe();
+  }catch(e){ console.warn('[Realtime]',e); }
 }
 
 async function loadFamilyFromSupabase(){if(!supabaseClient) return; const {data,error}=await supabaseClient.from('families').select('id,name').order('created_at',{ascending:true}).limit(1).maybeSingle();
@@ -1370,7 +1400,7 @@ function renderChild(){
       actionEl.addEventListener('click', async ()=>{
         if(inst.status==='approved') return;
         inst.status=(inst.status==='child_marked')?'pending':'child_marked';
-        inst.approvedStars=null; saveState();
+        inst.approvedStars=null; _lastLocalChange=Date.now(); saveState();
         if(supabaseClient) await syncInstanceToSupabase(inst);
         renderAll();
       });
@@ -1535,10 +1565,10 @@ function renderParent(){
       for(let n=1;n<=5;n++){
         const b=document.createElement('button'); b.type='button'; b.textContent='★'; b.className=(n<=cur)?'on':'';
         b.title=`Aprovar com ${n} estrela(s)`;
-        b.addEventListener('click', async ()=>{ inst.status='approved'; inst.approvedStars=n; saveState(); if(supabaseClient) await syncInstanceToSupabase(inst); toast('Aprovada ✅','ok'); renderAll(); });
+        b.addEventListener('click', async ()=>{ inst.status='approved'; inst.approvedStars=n; _lastLocalChange=Date.now(); saveState(); if(supabaseClient) await syncInstanceToSupabase(inst); toast('Aprovada ✅','ok'); renderAll(); });
         pick.appendChild(b);
       }
-      tr.querySelector('[data-act=reject]').addEventListener('click', async ()=>{ inst.status='rejected'; inst.approvedStars=null; saveState(); if(supabaseClient) await syncInstanceToSupabase(inst); toast('Recusada ✖️'); renderAll(); });
+      tr.querySelector('[data-act=reject]').addEventListener('click', async ()=>{ inst.status='rejected'; inst.approvedStars=null; _lastLocalChange=Date.now(); saveState(); if(supabaseClient) await syncInstanceToSupabase(inst); toast('Recusada ✖️'); renderAll(); });
       tbody.appendChild(tr);
     });
   }
@@ -1861,6 +1891,28 @@ async function registerWeeklyPayment(){
 }
 
 
+// Backup local
+function exportBackup(){
+  try{
+    const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=`kidstasks-backup-${getTodayISO()}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    toast('Backup exportado ✅','ok');
+  }catch(e){ toast('Erro ao exportar: '+e.message,'error'); }
+}
+async function importBackup(file){
+  try{
+    const text=await file.text();
+    const data=JSON.parse(text);
+    if(!data||typeof data!=='object') throw new Error('Arquivo inválido');
+    const fields=['tasks','instances','goals','weekHistory','familyId','familyName','childId','childrenList','pointValueBRL','showMoneyToChild','parentPin','parentPinEnabled','lastWeekStart','totalGoalStars'];
+    fields.forEach(k=>{ if(data[k]!==undefined) state[k]=data[k]; });
+    saveState(); ensureInstancesForToday(); renderAll();
+    toast('Backup importado ✅','ok');
+  }catch(e){ toast('Erro ao importar: '+e.message,'error'); }
+}
+
 // PIX + Reviews
 const PROJECT_ID='kidstasks';
 const PIX_KEY='4c6086a2-4bb8-474b-a4cf-ced8c8d82189';
@@ -2165,12 +2217,21 @@ function bindEvents(){
   // family/children
   $('#familyCreateBtn').addEventListener('click', async ()=>{ try{ await createFamilyOnly(); toast('Família criada','ok'); }catch(e){ toast('Erro ao criar família','error'); } renderAll(); });
   $('#loadFamilyBtn').addEventListener('click', async ()=>{ if(!supabaseClient) return toast('Configure o Supabase','error');
-    try{ await loadFamilyFromSupabase(); await loadChildrenFromSupabase(); await loadTasksFromSupabase(); await loadTaskInstancesFromSupabase(); ensureInstancesForToday(); toast('Família carregada','ok'); }
+    try{ await loadFamilyFromSupabase(); await loadChildrenFromSupabase(); await loadTasksFromSupabase(); await loadTaskInstancesFromSupabase(); ensureInstancesForToday(); setupRealtime(); toast('Família carregada','ok'); }
     catch(e){ toast('Erro ao buscar família','error'); }
     renderAll();
   });
   $('#childCreateBtn').addEventListener('click', async ()=>{ try{ await createChildOnly(); toast('Criança adicionada','ok'); }catch(e){ toast('Erro ao adicionar criança','error'); } ensureInstancesForToday(); renderAll(); });
   $('#refreshChildrenBtn').addEventListener('click', async ()=>{ try{ await loadChildrenFromSupabase(); toast('Lista atualizada','ok'); }catch(e){ toast('Erro ao atualizar','error'); } renderAll(); });
+
+  // Backup
+  $('#btnExportBackup').addEventListener('click', exportBackup);
+  $('#btnImportBackup').addEventListener('click', ()=>$('#importBackupInput').click());
+  $('#importBackupInput').addEventListener('change', async e=>{
+    const file=e.target.files?.[0]; if(!file) return;
+    if(!confirm('Importar backup irá substituir os dados locais. Continuar?')) return;
+    await importBackup(file); e.target.value='';
+  });
 }
 
 function init(){
@@ -2197,19 +2258,22 @@ function init(){
         await loadWeekHistoryFromSupabase().catch(()=>{});
         ensureInstancesForToday();
         setCloudStatus('connected','Supabase sincronizado');
+        setupRealtime();
         renderAll();
       }
     }catch(e){ setCloudStatus('error','Erro no Supabase'); }
   })();
 
-  // Auto-sync: detecta ações feitas em outros dispositivos
+  // Auto-sync: fallback polling (Realtime é a via principal)
   document.addEventListener('visibilitychange', async ()=>{
     if(document.visibilityState!=='visible') return;
     if(!supabaseClient || !state.familyId || !state.childId) return;
+    if(Date.now()-_lastLocalChange < 8000) return; // evita sobrescrever ação local recente
     try{ await loadTaskInstancesFromSupabase(); renderAll(); }catch(e){}
   });
   setInterval(()=>{
     if(document.hidden || !supabaseClient || !state.familyId || !state.childId) return;
+    if(Date.now()-_lastLocalChange < 15000) return; // evita race condition com ação local
     loadTaskInstancesFromSupabase().then(()=>renderAll()).catch(()=>{});
   }, 30000);
 
