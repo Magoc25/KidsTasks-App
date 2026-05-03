@@ -424,6 +424,18 @@
             </div>
           </div>
 
+          <div class="card" style="box-shadow:none;background:var(--tint-peach);border:1px solid rgba(239,68,68,.2)">
+            <div class="bd">
+              <h3 style="margin:0 0 6px;font-size:16px">🛠️ Manutenção</h3>
+              <p style="font-size:13px;color:var(--slate);margin:0 0 10px">Use se as tarefas não estiverem sincronizando corretamente entre dispositivos.</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-secondary" id="btnForceSync" type="button">☁️ Sincronizar tudo do Supabase</button>
+                <button class="btn btn-secondary" id="btnForceWeekReset" type="button">🔄 Resetar semana atual</button>
+              </div>
+              <p id="maintenanceStatus" style="font-size:12px;color:var(--slate);margin:8px 0 0"></p>
+            </div>
+          </div>
+
           <div class="card" style="box-shadow:none;background:var(--surface)">
             <div class="bd">
               <h3 style="margin:0 0 10px;font-size:16px">PIN do responsável</h3>
@@ -1598,6 +1610,40 @@ function setParentTab(tab){
   if(tab==='history') renderHistory();
 }
 
+// ── Manutenção ──
+async function forceSyncAll(){
+  if(!supabaseClient||!state.familyId) return toast('Configure o Supabase primeiro','error');
+  const st=$('#maintenanceStatus'); if(st) st.textContent='Sincronizando...';
+  try{
+    await loadChildrenFromSupabase();
+    await loadTasksFromSupabase();
+    await loadTaskInstancesFromSupabase();
+    await loadGoalsFromSupabase();
+    await loadWeekHistoryFromSupabase();
+    ensureInstancesForToday();
+    renderAll();
+    toast('Sincronização concluída ✅','ok');
+    if(st) st.textContent='Última sincronização: '+new Date().toLocaleTimeString('pt-BR');
+  }catch(e){ toast('Erro: '+(e.message||e),'error'); if(st) st.textContent='Erro ao sincronizar.'; }
+}
+
+async function forceWeekReset(){
+  const week=getWeekRange();
+  if(!confirm('Resetar TODAS as marcações desta semana? As tarefas voltarão ao estado "não marcada".\n\nIsso apagará do Supabase também.')) return;
+  // Limpa local
+  state.instances=(state.instances||[]).filter(i=>i.date<week.start);
+  state.weekPaid=false; saveState();
+  // Limpa Supabase
+  if(supabaseClient&&state.familyId){
+    try{
+      await supabaseClient.from('task_instances')
+        .delete().eq('family_id',state.familyId).gte('date',week.start);
+      toast('Semana resetada ✅','ok');
+    }catch(e){ toast('Reset local OK; falha no Supabase','error'); }
+  } else { toast('Reset local feito (Supabase não configurado)','ok'); }
+  ensureInstancesForToday(); renderAll();
+}
+
 // ── Histórico de semanas ──
 function fmtWeekLabel(start, end){
   const opts={day:'2-digit',month:'short'};
@@ -2050,6 +2096,9 @@ function bindEvents(){
   // settings
   $('#toggleShowMoney').addEventListener('change', (e)=>{ state.showMoneyToChild=e.target.checked; saveState(); toast('Salvo','ok'); });
   $('#settingPointValueSaveBtn').addEventListener('click', ()=>{ const v=parseFloat($('#settingPointValue').value); if(!v||v<=0) return toast('Digite um valor válido','error'); state.pointValueBRL=v; saveState(); toast('Taxa salva','ok'); renderAll(); });
+  $('#btnForceSync').addEventListener('click', ()=>forceSyncAll());
+  $('#btnForceWeekReset').addEventListener('click', ()=>forceWeekReset());
+
   $('#settingParentPinSaveBtn').addEventListener('click', ()=>{ const enabled=$('#settingParentPinEnabled').checked; const pin=$('#settingParentPinInput').value.trim();
     if(enabled){ if(!pin||pin.length<4) return toast('PIN deve ter 4+ dígitos','error'); state.parentPinEnabled=true; state.parentPin=pin; }
     else { state.parentPinEnabled=false; state.parentPin=''; }
