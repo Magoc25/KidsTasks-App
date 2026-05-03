@@ -90,6 +90,10 @@
 .input{height:var(--hit);border-radius:var(--r-btn);border:1px solid var(--hairline-strong);padding:0 14px;font-size:16px;outline:none;background:#fff}
 .input:focus{border:2px solid var(--primary)}
 .hidden{display:none!important}
+.day-btn{height:34px;min-width:42px;border-radius:8px;border:1px solid var(--hairline-strong);background:#fff;font-size:12px;font-weight:500;cursor:pointer;color:var(--slate);padding:0 8px;transition:background .12s,color .12s,border-color .12s}
+.day-btn.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+.day-preset{height:30px;padding:0 10px;border-radius:var(--r-pill);border:1px solid var(--hairline);background:var(--surface);font-size:12px;cursor:pointer;color:var(--slate)}
+.day-preset:hover{border-color:var(--primary);color:var(--primary)}
 .cloud-indicator{display:inline-flex;align-items:center;gap:8px;border-radius:999px;border:1px solid rgba(255,255,255,.35);padding:6px 10px;background:rgba(0,0,0,.12);cursor:pointer;color:#fff}
 .cloud-dot{width:10px;height:10px;border-radius:999px;background:var(--warning)}
 .cloud-connected .cloud-dot{background:var(--success)}
@@ -201,17 +205,42 @@
       <section class="card hidden" id="panelTasks">
         <div class="hd"><h2>Tarefas cadastradas</h2><div class="meta">cadastre, edite e ajuste</div></div>
         <div class="bd">
-          <form id="addTaskForm" style="display:grid;grid-template-columns: 150px 1fr 110px 140px 140px auto;gap:8px;align-items:end;margin-bottom:12px">
-            <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Ícone
-              <select class="input" id="fIcon"></select>
-            </label>
-            <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Nome<input class="input" id="fTitle" placeholder="Ex: Guardar brinquedos"/></label>
-            <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">⭐ (1–5)<input class="input" id="fPoints" type="number" min="1" max="5" value="1"/></label>
-            <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Frequência<select class="input" id="fFreq"><option value="daily">diária</option><option value="weekly">semanal</option></select></label>
-            <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Tipo<select class="input" id="fReward"><option value="money">💰 Dinheiro</option><option value="goal">🏆 Meta</option></select></label>
-            <button class="btn btn-primary" type="submit">+ Adicionar</button>
+          <form id="addTaskForm" style="margin-bottom:12px">
+            <div style="display:grid;grid-template-columns:150px 1fr 110px 160px 140px auto;gap:8px;align-items:end">
+              <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Ícone
+                <select class="input" id="fIcon"></select>
+              </label>
+              <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Nome<input class="input" id="fTitle" placeholder="Ex: Guardar brinquedos"/></label>
+              <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">⭐ (1–5)<input class="input" id="fPoints" type="number" min="1" max="5" value="1"/></label>
+              <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Frequência
+                <select class="input" id="fFreq">
+                  <option value="daily">Diária</option>
+                  <option value="weekly">Semanal</option>
+                  <option value="custom">Dias específicos</option>
+                </select>
+              </label>
+              <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Tipo<select class="input" id="fReward"><option value="money">💰 Dinheiro</option><option value="goal">🏆 Meta</option></select></label>
+              <button class="btn btn-primary" type="submit">+ Adicionar</button>
+            </div>
+            <div id="fDaysRow" style="display:none;margin-top:10px;padding:10px;background:var(--surface);border-radius:var(--r-card);border:1px solid var(--hairline)">
+              <div style="font-size:13px;color:var(--slate);margin-bottom:6px;font-weight:500">Selecione os dias</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+                <button type="button" class="day-preset" data-target="fDayPicker" data-days="1,2,3,4,5">Seg–Sex</button>
+                <button type="button" class="day-preset" data-target="fDayPicker" data-days="0,6">Fim de semana</button>
+                <button type="button" class="day-preset" data-target="fDayPicker" data-days="0,1,2,3,4,5,6">Todos</button>
+              </div>
+              <div id="fDayPicker" style="display:flex;gap:6px;flex-wrap:wrap">
+                <button type="button" class="day-btn" data-day="0">Dom</button>
+                <button type="button" class="day-btn" data-day="1">Seg</button>
+                <button type="button" class="day-btn" data-day="2">Ter</button>
+                <button type="button" class="day-btn" data-day="3">Qua</button>
+                <button type="button" class="day-btn" data-day="4">Qui</button>
+                <button type="button" class="day-btn" data-day="5">Sex</button>
+                <button type="button" class="day-btn" data-day="6">Sáb</button>
+              </div>
+            </div>
           </form>
-          <table class="table"><thead><tr><th>Ícone</th><th>Tarefa</th><th>⭐</th><th>Frequência</th><th>Tipo</th><th>Ações</th></tr></thead><tbody id="tasksBody"></tbody></table>
+          <table class="table"><thead><tr><th>Ícone</th><th>Tarefa</th><th>⭐</th><th>Dias</th><th>Tipo</th><th>Ações</th></tr></thead><tbody id="tasksBody"></tbody></table>
         </div>
       </section>
 
@@ -351,8 +380,29 @@
               <input class="input" id="editPoints" type="number" min="1" max="5" value="1" />
             </label>
             <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Frequência
-              <select class="input" id="editFreq"><option value="daily">diária</option><option value="weekly">semanal</option></select>
+              <select class="input" id="editFreq">
+                <option value="daily">Diária</option>
+                <option value="weekly">Semanal</option>
+                <option value="custom">Dias específicos</option>
+              </select>
             </label>
+          </div>
+          <div id="editDaysRow" style="display:none;padding:10px;background:var(--surface);border-radius:var(--r-card);border:1px solid var(--hairline)">
+            <div style="font-size:13px;color:var(--slate);margin-bottom:6px;font-weight:500">Selecione os dias</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+              <button type="button" class="day-preset" data-target="editDayPicker" data-days="1,2,3,4,5">Seg–Sex</button>
+              <button type="button" class="day-preset" data-target="editDayPicker" data-days="0,6">Fim de semana</button>
+              <button type="button" class="day-preset" data-target="editDayPicker" data-days="0,1,2,3,4,5,6">Todos</button>
+            </div>
+            <div id="editDayPicker" style="display:flex;gap:6px;flex-wrap:wrap">
+              <button type="button" class="day-btn" data-day="0">Dom</button>
+              <button type="button" class="day-btn" data-day="1">Seg</button>
+              <button type="button" class="day-btn" data-day="2">Ter</button>
+              <button type="button" class="day-btn" data-day="3">Qua</button>
+              <button type="button" class="day-btn" data-day="4">Qui</button>
+              <button type="button" class="day-btn" data-day="5">Sex</button>
+              <button type="button" class="day-btn" data-day="6">Sáb</button>
+            </div>
           </div>
           <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Tipo
             <select class="input" id="editReward"><option value="money">💰 Dinheiro</option><option value="goal">🏆 Meta</option></select>
@@ -467,7 +517,33 @@ const SUPABASE_ANON_KEY='ktm_supabase_anon';
 const TASK_ICON_OPTIONS=['📌','🛏️','🧸','🪥','🧼','🍽️','🧹','🧽','🗑️','🐶','🐱','🌿','📚','✏️','🧺','👕','👟','🚿','🧻','🪣','🧴','🍎','🥗','💧','⏰','🎒','🎹','⚽','🏃','🧘','🎨','🧩','🌟','✅'];
 const GOAL_ICON_OPTIONS=['🎯','🎁','🍦','🎮','📱','🧸','📚','⚽','🎨','🧩','🚲','🛴','🏖️','🎬','🍕','🧁','🐾','🌟','🏆'];
 
-function starString(n){const s=Math.max(0,Math.min(5,parseInt(n,10)||0));return '★'.repeat(s)+'☆'.repeat(5-s);} 
+function starString(n){const s=Math.max(0,Math.min(5,parseInt(n,10)||0));return '★'.repeat(s)+'☆'.repeat(5-s);}
+const DAY_NAMES=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+function formatDays(freq,days){
+  if(freq==='daily') return 'Diária';
+  if(freq==='weekly') return 'Semanal';
+  if(!Array.isArray(days)||!days.length) return 'Personalizado';
+  const s=[...days].sort((a,b)=>a-b);
+  if(s.join()====='1,2,3,4,5') return 'Seg–Sex';
+  if(s.join()==='0,6') return 'Fim de semana';
+  if(s.length===7) return 'Todos os dias';
+  return s.map(d=>DAY_NAMES[d]).join(' ');
+}
+function getSelectedDays(pickerId){
+  const el=document.getElementById(pickerId); if(!el) return [];
+  return [...el.querySelectorAll('.day-btn.on')].map(b=>parseInt(b.dataset.day));
+}
+function setSelectedDays(pickerId,days){
+  const el=document.getElementById(pickerId); if(!el) return;
+  el.querySelectorAll('.day-btn').forEach(b=>{
+    b.classList.toggle('on',(days||[]).includes(parseInt(b.dataset.day)));
+  });
+}
+function toggleDaysRow(freqVal,rowId,pickerId){
+  const row=$(rowId); if(!row) return;
+  row.style.display=freqVal==='custom'?'block':'none';
+  if(freqVal!=='custom') setSelectedDays(pickerId.replace('#',''),[]);
+} 
 function populateIconSelect(selectEl, options, fallback){
   if(!selectEl) return;
   selectEl.innerHTML='';
@@ -565,7 +641,11 @@ function ensureInstancesForToday(){
   const cid = activeChildId();
   const today=getTodayISO();
   const existing=new Set(instancesForChild(cid).filter(i=>i.date===today).map(i=>i.taskId));
+  const todayDay=new Date().getDay();
   tasksForChild(cid).forEach(t=>{
+    if(t.frequency==='custom'){
+      if(!Array.isArray(t.days)||!t.days.includes(todayDay)) return;
+    }
     if(!existing.has(t.id)) (state.instances||[]).push({id:`i-${t.id}-${today}-${cid}`,childId:cid,taskId:t.id,date:today,status:'pending',approvedStars:null});
   });
 }
@@ -768,6 +848,8 @@ function openEditTask(task){
   $('#editFreq').value=task.frequency||'daily';
   $('#editReward').value=task.rewardType||'money';
   $('#editIcon').value=task.icon||'📌';
+  toggleDaysRow(task.frequency||'daily','#editDaysRow','editDayPicker');
+  if(task.frequency==='custom') setSelectedDays('editDayPicker', task.days||[]);
   $('#editTaskOverlay').classList.add('open');
 }
 function closeEditTask(){ $('#editTaskOverlay').classList.remove('open'); }
@@ -963,7 +1045,7 @@ function renderParent(){
       <td>${esc(t.icon||'✅')}</td>
       <td>${esc(t.title)}</td>
       <td>${Math.max(1,Math.min(5,parseInt(t.points,10)||1))}</td>
-      <td>${esc(t.frequency||'daily')}</td>
+      <td>${esc(formatDays(t.frequency||'daily',t.days))}</td>
       <td>${(t.rewardType||'money')==='goal'?'🏆 Meta':'💰 Dinheiro'}</td>
       <td>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1120,6 +1202,22 @@ function bindEvents(){
   // tabs
   $all('[data-tab]').forEach(b=>b.addEventListener('click', ()=>setParentTab(b.dataset.tab)));
 
+  // day buttons + presets (add form)
+  $('#fFreq').addEventListener('change', e=>toggleDaysRow(e.target.value,'#fDaysRow','fDayPicker'));
+  $all('#fDayPicker .day-btn').forEach(b=>b.addEventListener('click',()=>b.classList.toggle('on')));
+  $all('#fDaysRow .day-preset').forEach(btn=>btn.addEventListener('click',()=>{
+    const days=btn.dataset.days.split(',').map(Number);
+    setSelectedDays('fDayPicker',days);
+  }));
+
+  // day buttons + presets (edit modal)
+  $('#editFreq').addEventListener('change', e=>toggleDaysRow(e.target.value,'#editDaysRow','editDayPicker'));
+  $all('#editDayPicker .day-btn').forEach(b=>b.addEventListener('click',()=>b.classList.toggle('on')));
+  $all('#editDaysRow .day-preset').forEach(btn=>btn.addEventListener('click',()=>{
+    const days=btn.dataset.days.split(',').map(Number);
+    setSelectedDays('editDayPicker',days);
+  }));
+
   // add task
   $('#addTaskForm').addEventListener('submit', async (e)=>{
     e.preventDefault();
@@ -1128,9 +1226,11 @@ function bindEvents(){
     const points=Math.max(1,Math.min(5,parseInt($('#fPoints').value,10)||1));
     const frequency=$('#fFreq').value;
     const rewardType=$('#fReward').value;
+    const days=frequency==='custom'?getSelectedDays('fDayPicker'):null;
     if(!title) return toast('Digite o nome da tarefa','error');
+    if(frequency==='custom' && (!days||!days.length)) return toast('Selecione pelo menos um dia','error');
     const tint=['mint','peach','yellow','sky','lav'][Math.floor(Math.random()*5)];
-    const task={id:'t'+Math.random().toString(36).slice(2,9),title,icon,tint,points,frequency,rewardType,childId:activeChildId()};
+    const task={id:'t'+Math.random().toString(36).slice(2,9),title,icon,tint,points,frequency,days,rewardType,childId:activeChildId()};
     if(supabaseClient && state.familyId){
       try{
         const payload={title,points,frequency,family_id:state.familyId,icon,tint,reward_type:rewardType};
@@ -1147,6 +1247,7 @@ function bindEvents(){
       }catch(err){}
     }
     state.tasks.push(task); saveState(); ensureInstancesForToday(); e.target.reset();
+    toggleDaysRow('daily','#fDaysRow','fDayPicker');
     populateIconSelect(document.getElementById('fIcon'), TASK_ICON_OPTIONS, '📌');
     toast('Tarefa adicionada','ok');
     renderAll();
@@ -1164,9 +1265,10 @@ function bindEvents(){
     if(!newTitle) return toast('Digite o nome da tarefa','error');
     task.title=newTitle;
     task.points=Math.max(1,Math.min(5,parseInt($('#editPoints').value,10)||1));
-    task.frequency=$('#editFreq').value;
     task.rewardType=$('#editReward').value;
     task.icon=$('#editIcon').value||task.icon||'📌';
+    task.frequency=$('#editFreq').value;
+    task.days=task.frequency==='custom'?getSelectedDays('editDayPicker'):null;
     saveState();
     if(supabaseClient && state.familyId){
       const ok=await updateTaskInSupabase(task);
