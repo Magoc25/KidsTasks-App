@@ -27,8 +27,8 @@
   .titleblock .subtitle{font-size:11px}
   .btn-secondary-on-dark{padding:0 10px;font-size:13px}
   .avatar{width:36px;height:36px}
-  /* Container */
-  .container{padding:0 var(--sp-2) 80px;transform:translateY(-16px)}
+  /* Container — mais espaço do header no mobile */
+  .container{padding:8px var(--sp-2) 80px;transform:translateY(0)}
   /* Grid → 1 coluna */
   .grid{grid-template-columns:1fr!important;gap:12px}
   /* KPI → 3 colunas compactas */
@@ -68,6 +68,13 @@
   .progress-row{font-size:12px}
   /* Goal card na criança */
   #childGoalsCard .hd h2{font-size:16px}
+  /* Config — overflow de texto na lista de crianças */
+  .task .title{font-size:14px;word-break:break-word;overflow-wrap:break-word}
+  .task .sub{font-size:11px}
+  /* Inputs não ultrapassam a tela */
+  .input{max-width:100%;box-sizing:border-box}
+  /* Formulário de config em coluna no mobile */
+  #panelSettings .card .bd [style*="grid-template-columns: 1fr 1fr"]{display:flex!important;flex-direction:column!important}
 }
 @media(max-width:380px){
   .titleblock .subtitle{display:none}
@@ -846,6 +853,7 @@ const defaultState={
   pointValueBRL:0.10,
   showMoneyToChild:false,
   weekPaid:false,
+  lastWeekStart:'',
   totalGoalStars:0,
   goals:[],
   tasks:[
@@ -923,9 +931,21 @@ function ensureInstancesForToday(){
   migratePerChildData();
   const cid = activeChildId();
   const today=getTodayISO();
+  const week=getWeekRange();
+
+  // Detecta virada de semana — reseta weekPaid e limpa instâncias antigas
+  if(state.lastWeekStart !== week.start){
+    state.lastWeekStart = week.start;
+    state.weekPaid = false;
+    // Remove instâncias locais (não-UUID) de semanas anteriores
+    state.instances = (state.instances||[]).filter(i =>
+      isUuidLike(String(i.id)) || i.date >= week.start
+    );
+    saveState();
+  }
+
   const existing=new Set(instancesForChild(cid).filter(i=>i.date===today).map(i=>i.taskId));
   const todayDay=new Date().getDay();
-  const week=getWeekRange();
   tasksForChild(cid).forEach(t=>{
     // custom: só nos dias selecionados
     if(t.frequency==='custom'){
@@ -989,21 +1009,21 @@ async function loadChildrenFromSupabase(){if(!supabaseClient || !state.familyId)
   if(!state.childId && state.childrenList.length) state.childId=state.childrenList[0].id; saveState();}
 async function loadTasksFromSupabase(){
   if(!supabaseClient || !state.familyId || !state.childId) return;
-  // carrega apenas tarefas da criança ativa
   let data=null, error=null;
-  async function retryOld(){
-    return await supabaseClient.from('tasks')
-      .select('id,title,points,frequency,family_id,child_id,created_at')
-      .eq('family_id', state.familyId)
-      .eq('child_id', state.childId)
-      .order('created_at',{ascending:true});
-  }
+  // Busca tarefas da criança ativa OU sem criança atribuída (child_id IS NULL)
   ({data,error}=await supabaseClient.from('tasks')
     .select('id,title,points,frequency,days,target_minutes,family_id,child_id,icon,tint,reward_type,created_at')
     .eq('family_id', state.familyId)
-    .eq('child_id', state.childId)
+    .or(`child_id.eq.${state.childId},child_id.is.null`)
     .order('created_at',{ascending:true}));
-  if(error){({data,error}=await retryOld());}
+  if(error){
+    // fallback sem colunas novas
+    ({data,error}=await supabaseClient.from('tasks')
+      .select('id,title,points,frequency,family_id,child_id,created_at')
+      .eq('family_id', state.familyId)
+      .or(`child_id.eq.${state.childId},child_id.is.null`)
+      .order('created_at',{ascending:true}));
+  }
   if(error) throw error;
 
   const rows=Array.isArray(data)?data:[];
