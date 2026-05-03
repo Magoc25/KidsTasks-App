@@ -94,6 +94,9 @@
 .day-btn.on{background:var(--primary);color:#fff;border-color:var(--primary)}
 .day-preset{height:30px;padding:0 10px;border-radius:var(--r-pill);border:1px solid var(--hairline);background:var(--surface);font-size:12px;cursor:pointer;color:var(--slate)}
 .day-preset:hover{border-color:var(--primary);color:var(--primary)}
+.timer-display{font-size:22px;font-weight:700;color:var(--primary);letter-spacing:.04em;min-width:70px;text-align:center}
+.timer-ontime{color:var(--success)}
+.timer-late{color:var(--error)}
 .cloud-indicator{display:inline-flex;align-items:center;gap:8px;border-radius:999px;border:1px solid rgba(255,255,255,.35);padding:6px 10px;background:rgba(0,0,0,.12);cursor:pointer;color:#fff}
 .cloud-dot{width:10px;height:10px;border-radius:999px;background:var(--warning)}
 .cloud-connected .cloud-dot{background:var(--success)}
@@ -176,7 +179,7 @@
       <section class="card" id="panelApprovals">
         <div class="hd"><h2>Aprovações do dia</h2><div class="meta">clique em ★ para aprovar com 1–5 estrelas</div></div>
         <div class="bd">
-          <table class="table"><thead><tr><th>Tarefa</th><th>⭐</th><th>Status</th><th>Ações</th></tr></thead><tbody id="approvalsBody"></tbody></table>
+          <table class="table"><thead><tr><th>Tarefa</th><th>⭐</th><th>Tempo</th><th>Status</th><th>Ações</th></tr></thead><tbody id="approvalsBody"></tbody></table>
         </div>
       </section>
 
@@ -222,6 +225,19 @@
               <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Tipo<select class="input" id="fReward"><option value="money">💰 Dinheiro</option><option value="goal">🏆 Meta</option></select></label>
               <button class="btn btn-primary" type="submit">+ Adicionar</button>
             </div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-top:8px">
+              <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--slate);cursor:pointer">
+                <input type="checkbox" id="fHasTimer" />
+                <span>⏱️ Cronômetro</span>
+              </label>
+              <div id="fTimerRow" style="display:none;display:flex;align-items:center;gap:8px">
+                <span style="font-size:13px;color:var(--slate)">Tempo esperado:</span>
+                <input class="input" id="fTargetMinutes" type="number" min="1" max="180" value="10"
+                  style="width:80px" />
+                <span style="font-size:13px;color:var(--slate)">min</span>
+              </div>
+            </div>
+
             <div id="fDaysRow" style="display:none;margin-top:10px;padding:10px;background:var(--surface);border-radius:var(--r-card);border:1px solid var(--hairline)">
               <div style="font-size:13px;color:var(--slate);margin-bottom:6px;font-weight:500">Selecione os dias</div>
               <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
@@ -407,6 +423,18 @@
           <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Tipo
             <select class="input" id="editReward"><option value="money">💰 Dinheiro</option><option value="goal">🏆 Meta</option></select>
           </label>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+            <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--slate);cursor:pointer">
+              <input type="checkbox" id="editHasTimer" />
+              <span>⏱️ Cronômetro</span>
+            </label>
+            <div id="editTimerRow" style="display:none;align-items:center;gap:8px">
+              <span style="font-size:13px;color:var(--slate)">Tempo esperado:</span>
+              <input class="input" id="editTargetMinutes" type="number" min="1" max="180" value="10"
+                style="width:80px" />
+              <span style="font-size:13px;color:var(--slate)">min</span>
+            </div>
+          </div>
           <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px">
             <button class="btn btn-secondary" type="button" id="editCancel">Cancelar</button>
             <button class="btn btn-primary" type="submit">Salvar</button>
@@ -519,6 +547,59 @@ const GOAL_ICON_OPTIONS=['🎯','🎁','🍦','🎮','📱','🧸','📚','⚽',
 
 function starString(n){const s=Math.max(0,Math.min(5,parseInt(n,10)||0));return '★'.repeat(s)+'☆'.repeat(5-s);}
 const DAY_NAMES=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+function formatElapsed(sec){
+  if(!sec && sec!==0) return '—';
+  const m=Math.floor(sec/60), s=sec%60;
+  return m>0?`${m}min ${s}s`:`${s}s`;
+}
+function timerLabel(elapsedSec, targetMin){
+  if(!elapsedSec && elapsedSec!==0) return '';
+  const targetSec=(targetMin||0)*60;
+  if(!targetSec) return formatElapsed(elapsedSec);
+  const diff=elapsedSec-targetSec;
+  if(diff<=0) return `✅ ${formatElapsed(elapsedSec)} (meta: ${targetMin}min)`;
+  return `⚠️ ${formatElapsed(elapsedSec)} (+${formatElapsed(diff)} acima de ${targetMin}min)`;
+}
+function suggestedStars(inst, task){
+  if(!task.hasTimer||!task.targetMinutes||!inst.elapsedSeconds) return task.points;
+  const ratio=inst.elapsedSeconds/(task.targetMinutes*60);
+  if(ratio<=1.0) return task.points;
+  if(ratio<=1.3) return Math.max(1,task.points-1);
+  return Math.max(1,task.points-2);
+}
+
+let _globalTick=null;
+function startGlobalTick(){
+  if(_globalTick) return;
+  _globalTick=setInterval(()=>{
+    document.querySelectorAll('[data-timer-start]').forEach(el=>{
+      const start=parseInt(el.dataset.timerStart);
+      if(isNaN(start)) return;
+      const elapsed=Math.floor((Date.now()-start)/1000);
+      el.textContent=formatElapsed(elapsed);
+      const target=parseInt(el.dataset.timerTarget||'0');
+      el.className='timer-display '+(target&&elapsed>target*60?'timer-late':'timer-ontime');
+    });
+  },1000);
+}
+function stopGlobalTick(){ if(_globalTick){clearInterval(_globalTick);_globalTick=null;} }
+
+async function startTimer(inst){
+  inst.timerStartedAt=new Date().toISOString();
+  inst.elapsedSeconds=null;
+  saveState();
+  if(supabaseClient) syncInstanceToSupabase(inst).catch(()=>{});
+  renderAll();
+}
+async function stopTimer(inst, task){
+  const elapsed=Math.floor((Date.now()-new Date(inst.timerStartedAt).getTime())/1000);
+  inst.elapsedSeconds=elapsed;
+  inst.status='child_marked';
+  saveState();
+  if(supabaseClient) await syncInstanceToSupabase(inst).catch(()=>{});
+  renderAll();
+}
+
 function formatDays(freq,days){
   if(freq==='daily') return 'Diária';
   if(freq==='weekly') return 'Semanal';
@@ -704,7 +785,7 @@ async function loadTasksFromSupabase(){
       .order('created_at',{ascending:true});
   }
   ({data,error}=await supabaseClient.from('tasks')
-    .select('id,title,points,frequency,days,family_id,child_id,icon,tint,reward_type,created_at')
+    .select('id,title,points,frequency,days,target_minutes,family_id,child_id,icon,tint,reward_type,created_at')
     .eq('family_id', state.familyId)
     .eq('child_id', state.childId)
     .order('created_at',{ascending:true}));
@@ -719,6 +800,8 @@ async function loadTasksFromSupabase(){
     points:(typeof r.points==='number')?Math.max(1,Math.min(5,r.points)):1,
     frequency:r.frequency||'daily',
     days:Array.isArray(r.days)?r.days:null,
+    hasTimer:!!(r.target_minutes),
+    targetMinutes:typeof r.target_minutes==='number'?r.target_minutes:null,
     rewardType:(r.reward_type||'money'),
     icon:(r.icon||'✅'),
     tint:(r.tint|| (idx%2?'peach':'mint'))
@@ -734,7 +817,7 @@ async function loadTaskInstancesFromSupabase(){
   if(!supabaseClient || !state.familyId || !state.childId) return;
   const week=getWeekRange();
   const {data,error}=await supabaseClient.from('task_instances')
-    .select('id,family_id,child_id,task_id,date,status,approved_stars')
+    .select('id,family_id,child_id,task_id,date,status,approved_stars,elapsed_seconds,timer_started_at')
     .eq('family_id',state.familyId)
     .eq('child_id',state.childId)
     .gte('date',week.start).lte('date',week.end)
@@ -750,7 +833,9 @@ async function loadTaskInstancesFromSupabase(){
     taskId:r.task_id,
     date:r.date,
     status:r.status||'pending',
-    approvedStars:(typeof r.approved_stars==='number')?r.approved_stars:null
+    approvedStars:(typeof r.approved_stars==='number')?r.approved_stars:null,
+    elapsedSeconds:(typeof r.elapsed_seconds==='number')?r.elapsed_seconds:null,
+    timerStartedAt:r.timer_started_at||null
   })));
   saveState();
 }
@@ -760,7 +845,7 @@ async function syncInstanceToSupabase(instance){
   try{
     // garante childId local
     instance.childId = instance.childId || state.childId;
-    const payload={family_id:state.familyId,child_id:state.childId,task_id:instance.taskId,date:instance.date,status:instance.status,approved_stars:(typeof instance.approvedStars==='number')?instance.approvedStars:null};
+    const payload={family_id:state.familyId,child_id:state.childId,task_id:instance.taskId,date:instance.date,status:instance.status,approved_stars:(typeof instance.approvedStars==='number')?instance.approvedStars:null,elapsed_seconds:(typeof instance.elapsedSeconds==='number')?instance.elapsedSeconds:null,timer_started_at:instance.timerStartedAt||null};
     const {data:existing,error:selErr}=await supabaseClient.from('task_instances')
       .select('id')
       .eq('family_id',state.familyId).eq('child_id',state.childId)
@@ -768,7 +853,7 @@ async function syncInstanceToSupabase(instance){
     if(selErr) throw selErr;
     if(existing && existing.length){
       const {error:upErr}=await supabaseClient.from('task_instances')
-        .update({status:payload.status,approved_stars:payload.approved_stars})
+        .update({status:payload.status,approved_stars:payload.approved_stars,elapsed_seconds:payload.elapsed_seconds,timer_started_at:payload.timer_started_at})
         .eq('id',existing[0].id);
       if(upErr) throw upErr;
       instance.id=existing[0].id;
@@ -851,6 +936,9 @@ function openEditTask(task){
   $('#editIcon').value=task.icon||'📌';
   toggleDaysRow(task.frequency||'daily','#editDaysRow','editDayPicker');
   if(task.frequency==='custom') setSelectedDays('editDayPicker', task.days||[]);
+  $('#editHasTimer').checked=!!task.hasTimer;
+  $('#editTimerRow').style.display=task.hasTimer?'flex':'none';
+  $('#editTargetMinutes').value=task.targetMinutes||10;
   $('#editTaskOverlay').classList.add('open');
 }
 function closeEditTask(){ $('#editTaskOverlay').classList.remove('open'); }
@@ -877,7 +965,7 @@ function closeEditGoal(){
 async function updateTaskInSupabase(task){
   if(!supabaseClient) return true;
   try{
-    const payload={title:task.title,points:task.points,frequency:task.frequency,days:task.days||null,icon:task.icon,tint:task.tint,reward_type:task.rewardType};
+    const payload={title:task.title,points:task.points,frequency:task.frequency,days:task.days||null,target_minutes:task.targetMinutes||null,icon:task.icon,tint:task.tint,reward_type:task.rewardType};
     const {error}=await supabaseClient.from('tasks').update(payload).eq('id',task.id);
     if(!error) return true;
     const basic={title:task.title,points:task.points,frequency:task.frequency,days:task.days||null};
@@ -904,6 +992,7 @@ function renderChild(){
   const cid = activeChildId();
  const tlist = tasksForChild(cid);
  const insts = instancesForChild(cid).filter(i=>i.date===today).sort((a,b)=>tlist.findIndex(t=>t.id===a.taskId)-tlist.findIndex(t=>t.id===b.taskId));
+  let hasRunningTimer=false;
   insts.forEach(inst=>{
     const task=tlist.find(t=>t.id===inst.taskId); if(!task) return;
     const row=document.createElement('div'); row.className='task'; row.dataset.tint=task.tint||'mint';
@@ -913,16 +1002,62 @@ function renderChild(){
     const sub=document.createElement('div'); sub.className='sub';
     const badgeStars=document.createElement('span'); badgeStars.className='badge'; badgeStars.textContent=`⭐ +${Math.max(1,Math.min(5,task.points||1))}`;
     const badgeStatus=document.createElement('span'); badgeStatus.className='badge';
+
+    const isTimerRunning=task.hasTimer && inst.timerStartedAt && inst.elapsedSeconds==null;
+    const isTimerDone=task.hasTimer && inst.elapsedSeconds!=null;
+
     if(inst.status==='approved'){badgeStatus.classList.add('ok'); badgeStatus.textContent=starString(getInstanceStars(inst,task));}
     else if(inst.status==='child_marked'){badgeStatus.classList.add('await'); badgeStatus.textContent='Aguardando 👀';}
     else if(inst.status==='rejected'){badgeStatus.classList.add('rej'); badgeStatus.textContent='Recusada ✖️';}
     else {badgeStatus.textContent=(task.frequency==='weekly')?'Semanal':'Hoje';}
-    sub.append(badgeStars,badgeStatus); mid.append(title,sub);
-    const btn=document.createElement('button'); btn.className='check'; btn.dataset.state=(inst.status==='child_marked'||inst.status==='approved')?'done':'todo';
-    btn.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true"><path class="tick" d="M20 6L9 17l-5-5"></path></svg>`;
-    btn.addEventListener('click', async ()=>{ if(inst.status==='approved') return; inst.status=(inst.status==='child_marked')?'pending':'child_marked'; inst.approvedStars=null; saveState(); if(supabaseClient) await syncInstanceToSupabase(inst); renderAll(); });
-    row.append(ico,mid,btn); root.appendChild(row);
+
+    if(isTimerDone){
+      const tb=document.createElement('span'); tb.className='badge';
+      tb.textContent='⏱️ '+formatElapsed(inst.elapsedSeconds);
+      sub.append(badgeStars,badgeStatus,tb);
+    } else {
+      sub.append(badgeStars,badgeStatus);
+    }
+    mid.append(title,sub);
+
+    // Botão direito: timer ou checkbox
+    let actionEl;
+    if(task.hasTimer && inst.status==='pending' && !isTimerRunning){
+      // Botão Iniciar
+      actionEl=document.createElement('button');
+      actionEl.className='btn btn-primary'; actionEl.style.cssText='height:44px;font-size:13px;white-space:nowrap';
+      actionEl.textContent='▶ Iniciar';
+      actionEl.addEventListener('click', ()=>startTimer(inst));
+    } else if(isTimerRunning){
+      // Timer correndo + botão Concluí
+      hasRunningTimer=true;
+      const wrap=document.createElement('div'); wrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:4px';
+      const disp=document.createElement('div'); disp.className='timer-display timer-ontime';
+      const startTs=new Date(inst.timerStartedAt).getTime();
+      disp.dataset.timerStart=startTs;
+      if(task.targetMinutes) disp.dataset.timerTarget=task.targetMinutes;
+      disp.textContent=formatElapsed(Math.floor((Date.now()-startTs)/1000));
+      const stopBtn=document.createElement('button');
+      stopBtn.className='btn btn-primary'; stopBtn.style.cssText='height:32px;font-size:12px;white-space:nowrap';
+      stopBtn.textContent='✓ Concluí';
+      stopBtn.addEventListener('click', ()=>stopTimer(inst,task));
+      wrap.append(disp,stopBtn); actionEl=wrap;
+    } else {
+      // Checkbox padrão
+      actionEl=document.createElement('button'); actionEl.className='check';
+      actionEl.dataset.state=(inst.status==='child_marked'||inst.status==='approved')?'done':'todo';
+      actionEl.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true"><path class="tick" d="M20 6L9 17l-5-5"></path></svg>`;
+      actionEl.addEventListener('click', async ()=>{
+        if(inst.status==='approved') return;
+        inst.status=(inst.status==='child_marked')?'pending':'child_marked';
+        inst.approvedStars=null; saveState();
+        if(supabaseClient) await syncInstanceToSupabase(inst);
+        renderAll();
+      });
+    }
+    row.append(ico,mid,actionEl); root.appendChild(row);
   });
+  if(hasRunningTimer) startGlobalTick(); else stopGlobalTick();
 }
 
 function renderGoalsList(){
@@ -1017,10 +1152,11 @@ function renderParent(){
   if(!awaiting.length){const tr=document.createElement('tr'); tr.innerHTML='<td colspan="4" style="color:var(--slate)">Nenhuma pendente hoje.</td>'; tbody.appendChild(tr);} else {
     awaiting.forEach(inst=>{
       const task=ptasks.find(t=>t.id===inst.taskId); if(!task) return;
+      const timeInfo=inst.elapsedSeconds!=null?timerLabel(inst.elapsedSeconds,task.targetMinutes):(task.hasTimer?'⏱️ sem tempo':'—');
       const tr=document.createElement('tr');
-      tr.innerHTML=`<td><strong>${esc(task.icon||'✅')} ${esc(task.title)}</strong></td><td><div class="starPick"></div></td><td><span class="badge await">Aguardando</span></td><td><button class="btn btn-secondary" style="height:40px" data-act="reject">Recusar</button></td>`;
+      tr.innerHTML=`<td><strong>${esc(task.icon||'✅')} ${esc(task.title)}</strong></td><td><div class="starPick"></div></td><td style="font-size:13px;color:var(--slate)">${esc(timeInfo)}</td><td><span class="badge await">Aguardando</span></td><td><button class="btn btn-secondary" style="height:40px" data-act="reject">Recusar</button></td>`;
       const pick=tr.querySelector('.starPick');
-      const cur=getInstanceStars(inst,task);
+      const cur=suggestedStars(inst,task);
       for(let n=1;n<=5;n++){
         const b=document.createElement('button'); b.type='button'; b.textContent='★'; b.className=(n<=cur)?'on':'';
         b.title=`Aprovar com ${n} estrela(s)`;
@@ -1203,6 +1339,14 @@ function bindEvents(){
   // tabs
   $all('[data-tab]').forEach(b=>b.addEventListener('click', ()=>setParentTab(b.dataset.tab)));
 
+  // timer checkbox listeners
+  $('#fHasTimer').addEventListener('change', e=>{
+    $('#fTimerRow').style.display=e.target.checked?'flex':'none';
+  });
+  $('#editHasTimer').addEventListener('change', e=>{
+    $('#editTimerRow').style.display=e.target.checked?'flex':'none';
+  });
+
   // day buttons + presets (add form)
   $('#fFreq').addEventListener('change', e=>toggleDaysRow(e.target.value,'#fDaysRow','fDayPicker'));
   $all('#fDayPicker .day-btn').forEach(b=>b.addEventListener('click',()=>b.classList.toggle('on')));
@@ -1228,13 +1372,15 @@ function bindEvents(){
     const frequency=$('#fFreq').value;
     const rewardType=$('#fReward').value;
     const days=frequency==='custom'?getSelectedDays('fDayPicker'):null;
+    const hasTimer=$('#fHasTimer').checked;
+    const targetMinutes=hasTimer?Math.max(1,parseInt($('#fTargetMinutes').value,10)||10):null;
     if(!title) return toast('Digite o nome da tarefa','error');
     if(frequency==='custom' && (!days||!days.length)) return toast('Selecione pelo menos um dia','error');
     const tint=['mint','peach','yellow','sky','lav'][Math.floor(Math.random()*5)];
-    const task={id:'t'+Math.random().toString(36).slice(2,9),title,icon,tint,points,frequency,days,rewardType,childId:activeChildId()};
+    const task={id:'t'+Math.random().toString(36).slice(2,9),title,icon,tint,points,frequency,days,hasTimer,targetMinutes,rewardType,childId:activeChildId()};
     if(supabaseClient && state.familyId){
       try{
-        const payload={title,points,frequency,days:days||null,family_id:state.familyId,icon,tint,reward_type:rewardType};
+        const payload={title,points,frequency,days:days||null,target_minutes:targetMinutes||null,family_id:state.familyId,icon,tint,reward_type:rewardType};
         if(state.childId) payload.child_id=state.childId;
         const {data,error}=await supabaseClient.from('tasks').insert(payload).select().single();
         if(error){
@@ -1270,6 +1416,8 @@ function bindEvents(){
     task.icon=$('#editIcon').value||task.icon||'📌';
     task.frequency=$('#editFreq').value;
     task.days=task.frequency==='custom'?getSelectedDays('editDayPicker'):null;
+    task.hasTimer=$('#editHasTimer').checked;
+    task.targetMinutes=task.hasTimer?Math.max(1,parseInt($('#editTargetMinutes').value,10)||10):null;
     saveState();
     if(supabaseClient && state.familyId){
       const ok=await updateTaskInSupabase(task);
