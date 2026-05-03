@@ -1132,8 +1132,8 @@ async function loadTaskInstancesFromSupabase(){
   if(error) throw error;
 
   const rows = Array.isArray(data)?data:[];
-  // remove instâncias da semana da criança atual e substitui
-  state.instances = (state.instances||[]).filter(i => !(i.childId===state.childId && i.date>=week.start && i.date<=week.end && isUuidLike(String(i.id))));
+  // remove instâncias locais de tarefas UUID (evita duplicatas com instâncias do Supabase)
+  state.instances = (state.instances||[]).filter(i => !(i.childId===state.childId && i.date>=week.start && i.date<=week.end && isUuidLike(String(i.taskId))));
   state.instances.push(...rows.map(r=>({
     id:r.id,
     childId:r.child_id || state.childId,
@@ -1503,10 +1503,11 @@ function renderGoalsList(){
     }
 
     div.querySelector('[data-act=edit]').addEventListener('click', ()=>openEditGoal(goal));
-    div.querySelector('[data-act=delete]').addEventListener('click', ()=>{
+    div.querySelector('[data-act=delete]').addEventListener('click', async ()=>{
       if(!confirm('Excluir esta meta?')) return;
       state.goals = (state.goals||[]).filter(g=>g.id!==goal.id);
       saveState();
+      if(supabaseClient && isUuidLike(String(goal.id))) await deleteGoalFromSupabase(goal).catch(()=>{});
       toast('Meta removida');
       renderAll();
     });
