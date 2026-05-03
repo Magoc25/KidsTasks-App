@@ -2,7 +2,7 @@
   "name": "KidsTasks — Tarefas e Mesada",
   "short_name": "KidsTasks",
   "description": "App de tarefas e mesada para crianças: gerencie tarefas diárias, aprove conclusões e calcule a recompensa semanal.",
-  "start_url": "./KidsTasks.html",
+  "start_url": "./KidsTasks2.html",
   "scope": "./",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone"],
