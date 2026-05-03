@@ -933,14 +933,13 @@ function ensureInstancesForToday(){
   const today=getTodayISO();
   const week=getWeekRange();
 
-  // Detecta virada de semana — reseta weekPaid e limpa instâncias antigas
-  if(state.lastWeekStart !== week.start){
+  // Detecta virada de semana — reseta tudo da semana anterior
+  const hasOldInstances = (state.instances||[]).some(i => i.date < week.start);
+  if(state.lastWeekStart !== week.start || hasOldInstances){
     state.lastWeekStart = week.start;
     state.weekPaid = false;
-    // Remove instâncias locais (não-UUID) de semanas anteriores
-    state.instances = (state.instances||[]).filter(i =>
-      isUuidLike(String(i.id)) || i.date >= week.start
-    );
+    // Remove TODAS as instâncias anteriores ao início desta semana
+    state.instances = (state.instances||[]).filter(i => i.date >= week.start);
     saveState();
   }
 
