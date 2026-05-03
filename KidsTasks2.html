@@ -14,11 +14,19 @@
 <title>KidsTasks</title>
 <link rel="manifest" href="./manifest.json" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 <style>/* KidsTasksMoney — single-file (v4) */
 :root{--font:system-ui,-apple-system,"Inter","Segoe UI",Roboto,Arial,sans-serif;--r-btn:8px;--r-card:12px;--r-pill:9999px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-6:24px;--sp-7:32px;--canvas:#fff;--surface:#f6f6f5;--hairline:rgba(15,15,15,.12);--hairline-strong:rgba(15,15,15,.20);--ink:#191919;--ink-deep:#0f0f0f;--slate:rgba(15,15,15,.62);--muted:rgba(15,15,15,.38);--navy:#0b2a5b;--navy-deep:#071f45;--primary:#6e56cf;--primary-pressed:#5b45c9;--success:#21c36b;--warning:#ff9d2e;--error:#ef4444;--tint-mint:#e8f6ee;--tint-peach:#fdebe3;--tint-lav:#efeaff;--tint-sky:#e9f3ff;--tint-yellow:#fff4cc;--sh-1:rgba(15,15,15,.04) 0 1px 2px;--sh-2:rgba(15,15,15,.08) 0 4px 12px;--sh-3:rgba(15,15,15,.20) 0 24px 48px -8px;--hit:44px}
 *{box-sizing:border-box}html,body{height:100%}body{margin:0;font-family:var(--font);color:var(--ink);background:var(--surface)}
 .app{min-height:100vh;background:linear-gradient(180deg,var(--navy) 0,var(--navy) 240px,var(--surface) 240px)}
-.header{color:#fff;padding:var(--sp-6) var(--sp-4) var(--sp-4);position:relative;overflow:hidden}
+@keyframes tileReveal{from{opacity:0;transform:scale(.85) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes starBurst{0%{transform:scale(.4);opacity:0}65%{transform:scale(1.2)}100%{transform:scale(1);opacity:1}}
+@keyframes taskSlideIn{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:translateX(0)}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+.tile-reveal{animation:tileReveal .5s cubic-bezier(.16,1,.3,1) both}
+.star-burst{animation:starBurst .5s cubic-bezier(.16,1,.3,1) both}
+.task-slide{animation:taskSlideIn .35s ease both}
+.header{color:#fff;padding:var(--sp-6) var(--sp-4) var(--sp-4);position:relative;overflow:hidden;background-image:radial-gradient(circle,rgba(255,255,255,.12) 1px,transparent 1px);background-size:22px 22px}
 .header::before,.header::after{content:"";position:absolute;width:280px;height:280px;border-radius:50%}
 .header::before{right:-130px;top:-130px;background:radial-gradient(circle at 30% 30%,rgba(110,86,207,.35),rgba(110,86,207,0) 60%)}
 .header::after{left:-140px;top:-170px;background:radial-gradient(circle at 30% 30%,rgba(255,244,204,.28),rgba(255,244,204,0) 60%)}
@@ -66,7 +74,7 @@
 .tile .v{font-size:22px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;gap:10px}
 .starIcon{width:18px;height:18px;display:inline-block;background:radial-gradient(circle at 30% 30%,#ffe58a,#f7b500 70%);clip-path:polygon(50% 0%,62% 34%,98% 35%,69% 56%,79% 90%,50% 70%,21% 90%,31% 56%,2% 35%,38% 34%)}
 .progress{margin-top:16px;background:rgba(15,15,15,.06);border-radius:var(--r-pill);height:14px;overflow:hidden;border:1px solid rgba(15,15,15,.08)}
-.progress>div{height:100%;width:0%;background:linear-gradient(90deg,var(--success),#7ae7b0);transition:width .25s ease}
+.progress>div{height:100%;width:0%;background:linear-gradient(90deg,var(--success),#7ae7b0);transition:width 1.4s cubic-bezier(.16,1,.3,1)}
 .progress-row{display:flex;justify-content:space-between;align-items:center;margin-top:8px;color:var(--slate);font-size:14px}
 .table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid var(--hairline);border-radius:var(--r-card)}
 .table th,.table td{padding:12px 14px;border-bottom:1px solid rgba(15,15,15,.06);text-align:left;font-size:14px}
@@ -567,6 +575,81 @@ const GOAL_ICON_OPTIONS=['🎯','🎁','🍦','🎮','📱','🧸','📚','⚽',
 
 function starString(n){const s=Math.max(0,Math.min(5,parseInt(n,10)||0));return '★'.repeat(s)+'☆'.repeat(5-s);}
 const DAY_NAMES=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+// ── Áudio via Web Audio API ──
+let _audioCtx=null;
+function getAudio(){ if(!_audioCtx){ try{ _audioCtx=new(window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return _audioCtx; }
+function playTone(freq,dur,type='sine',vol=0.22,delay=0){
+  const ctx=getAudio(); if(!ctx) return;
+  try{
+    const osc=ctx.createOscillator(), gain=ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type=type; osc.frequency.value=freq;
+    const t=ctx.currentTime+delay;
+    gain.gain.setValueAtTime(0,t);
+    gain.gain.linearRampToValueAtTime(vol,t+0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001,t+dur);
+    osc.start(t); osc.stop(t+dur+0.02);
+  }catch(e){}
+}
+function playApprovalChime(){ playTone(523,.15,'sine',.18); playTone(784,.22,'sine',.18,.1); }
+function playProgressSound(){ [523,659,784].forEach((f,i)=>playTone(f,.12,'sine',.14,i*.16)); }
+function playCompleteSound(){
+  [523,659,784,1047].forEach((f,i)=>playTone(f,.25,'sine',.2,i*.13));
+  setTimeout(()=>playTone(1047,.7,'sine',.16),600);
+}
+function playGoalSound(){
+  [392,523,659,784,1047].forEach((f,i)=>playTone(f,.28,'square',.13,i*.09));
+  setTimeout(()=>[784,1047,1319].forEach((f,i)=>playTone(f,.4,'sine',.18,i*.11)),550);
+}
+
+// ── Confete ──
+function celebrateComplete(){
+  if(typeof confetti!=='undefined') confetti({particleCount:110,spread:72,origin:{y:.6},colors:['#6e56cf','#21c36b','#ffd36b','#ff8fb1','#7ae7b0']});
+  playCompleteSound();
+}
+function celebrateGoal(){
+  if(typeof confetti!=='undefined'){
+    confetti({particleCount:200,spread:90,origin:{y:.5},colors:['#FFD700','#FF6B6B','#6e56cf','#21c36b','#ff8fb1']});
+    setTimeout(()=>{ confetti({particleCount:90,angle:60,spread:55,origin:{x:0,y:.6}}); confetti({particleCount:90,angle:120,spread:55,origin:{x:1,y:.6}}); },400);
+  }
+  playGoalSound();
+}
+
+// ── Animações de entrada no painel da criança ──
+let _justEnteredChild=false, _prevDoneCount=0, _prevGoalStars=0;
+
+function animateBar(targetPct, onComplete){
+  const bar=$('#bar'); if(!bar) return;
+  bar.style.transition='none'; bar.style.width='0%';
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    bar.style.transition='width 1.4s cubic-bezier(.16,1,.3,1)';
+    bar.style.width=targetPct+'%';
+    if(onComplete) setTimeout(onComplete,1450);
+  }));
+}
+function animateTile(elId, target, delay=0){
+  setTimeout(()=>{
+    const el=$(elId); if(!el) return;
+    const dur=700, t0=performance.now();
+    (function frame(ts){
+      const p=Math.min((ts-t0)/dur,1), ease=1-Math.pow(1-p,3);
+      el.textContent=Math.round(ease*target);
+      if(p<1) requestAnimationFrame(frame); else el.textContent=target;
+    })(performance.now());
+  },delay);
+}
+function startChildReveal(sum){
+  const total=sum.todayTotal||1;
+  const pct=Math.min(100,Math.round((sum.todayDoneLike/total)*100));
+  if(sum.weekApprovedStars>0) playApprovalChime();
+  animateTile('#stars',sum.weekApprovedStars,0);
+  animateTile('#approved',sum.weekApprovedCount,250);
+  setTimeout(()=>{
+    if(pct>0) playProgressSound();
+    animateBar(pct,()=>{ if(pct>=100) setTimeout(celebrateComplete,200); });
+  },350);
+}
+
 // ── Foto da criança ──
 async function compressImage(file, size=120){
   return new Promise(resolve=>{
@@ -1060,20 +1143,36 @@ function renderChild(){
     } else { dispEl.textContent='👧'; }
   }
   const sum=computeSummary();
-  $('#stars').textContent=sum.weekApprovedStars;
-  $('#approved').textContent=sum.weekApprovedCount;
   const moneyTile=$('#childMoneyTile');
   if(moneyTile){
     moneyTile.classList.toggle('hidden', !state.showMoneyToChild);
-    if(state.showMoneyToChild){
-      $('#childMoneyAmount').textContent=sum.moneyBRL.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-    }
+    if(state.showMoneyToChild) $('#childMoneyAmount').textContent=sum.moneyBRL.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   }
   const total=sum.todayTotal||1;
-  const pct=Math.round((sum.todayDoneLike/total)*100);
-  $('#bar').style.width=Math.min(100,pct)+'%';
+  const pct=Math.min(100,Math.round((sum.todayDoneLike/total)*100));
   $('#progressText').textContent=`${sum.todayDoneLike} de ${total}`;
   $('#pendingText').textContent=`${sum.pendingCount} aguardando`;
+
+  if(_justEnteredChild){
+    _justEnteredChild=false;
+    $('#stars').textContent='0'; $('#approved').textContent='0';
+    $('#bar').style.transition='none'; $('#bar').style.width='0%';
+    setTimeout(()=>startChildReveal(sum), 1500);
+  } else {
+    // Detecta conclusão total do dia (celebração mid-session)
+    const wasDone=_prevDoneCount>=total && total>0;
+    const nowDone=sum.todayDoneLike>=total && total>0;
+    if(nowDone && !wasDone && sum.todayDoneLike>0) setTimeout(celebrateComplete,400);
+    // Detecta meta atingida (celebração mid-session)
+    const cid=activeChildId();
+    const newGoalReached=(state.goals||[]).some(g=>g.childId===cid && !g.delivered && sum.totalGoalStars>=g.targetStars && _prevGoalStars<g.targetStars);
+    if(newGoalReached) setTimeout(celebrateGoal,600);
+    _prevDoneCount=sum.todayDoneLike;
+    _prevGoalStars=sum.totalGoalStars||0;
+    $('#stars').textContent=sum.weekApprovedStars;
+    $('#approved').textContent=sum.weekApprovedCount;
+    $('#bar').style.width=pct+'%';
+  }
 
   const root=$('#tasks'); root.innerHTML='';
   const today=getTodayISO();
@@ -1147,6 +1246,11 @@ function renderChild(){
       });
     }
     row.append(ico,mid,actionEl); root.appendChild(row);
+  });
+  // Animação escalonada nas tarefas
+  root.querySelectorAll('.task').forEach((el,i)=>{
+    el.style.animationDelay=`${i*80}ms`;
+    el.classList.add('task-slide');
   });
   if(hasRunningTimer) startGlobalTick(); else stopGlobalTick();
   renderChildGoals();
@@ -1353,7 +1457,7 @@ function renderParent(){
   $('#supabaseConfigStatus').textContent=(supabaseConfig.url && supabaseConfig.anonKey)?'Configuração salva neste dispositivo.':'Supabase não configurado.';
 }
 
-function showMode(mode){ state.mode=mode; saveState(); $('#childPanel').classList.toggle('hidden', mode!=='child'); $('#parentPanel').classList.toggle('hidden', mode!=='parent'); }
+function showMode(mode){ state.mode=mode; saveState(); $('#childPanel').classList.toggle('hidden', mode!=='child'); $('#parentPanel').classList.toggle('hidden', mode!=='parent'); if(mode==='child') _justEnteredChild=true; }
 function openPinModal(){ $('#pinOverlay').classList.add('open'); $('#pinInput').value=''; $('#pinInput').focus(); }
 function closePinModal(){ $('#pinOverlay').classList.remove('open'); }
 function unlockParent(){ if(!state.parentPinEnabled){ showMode('parent'); closePinModal(); renderAll(); return; } const pin=$('#pinInput').value.trim(); if(pin!==String(state.parentPin||'')) return toast('PIN incorreto','error'); showMode('parent'); closePinModal(); renderAll(); }
