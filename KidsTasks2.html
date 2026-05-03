@@ -19,6 +19,63 @@
 :root{--font:system-ui,-apple-system,"Inter","Segoe UI",Roboto,Arial,sans-serif;--r-btn:8px;--r-card:12px;--r-pill:9999px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-6:24px;--sp-7:32px;--canvas:#fff;--surface:#f6f6f5;--hairline:rgba(15,15,15,.12);--hairline-strong:rgba(15,15,15,.20);--ink:#191919;--ink-deep:#0f0f0f;--slate:rgba(15,15,15,.62);--muted:rgba(15,15,15,.38);--navy:#0b2a5b;--navy-deep:#071f45;--primary:#6e56cf;--primary-pressed:#5b45c9;--success:#21c36b;--warning:#ff9d2e;--error:#ef4444;--tint-mint:#e8f6ee;--tint-peach:#fdebe3;--tint-lav:#efeaff;--tint-sky:#e9f3ff;--tint-yellow:#fff4cc;--sh-1:rgba(15,15,15,.04) 0 1px 2px;--sh-2:rgba(15,15,15,.08) 0 4px 12px;--sh-3:rgba(15,15,15,.20) 0 24px 48px -8px;--hit:44px}
 *{box-sizing:border-box}html,body{height:100%}body{margin:0;font-family:var(--font);color:var(--ink);background:var(--surface)}
 .app{min-height:100vh;background:linear-gradient(180deg,var(--navy) 0,var(--navy) 240px,var(--surface) 240px)}
+/* ── Mobile responsivo ── */
+@media(max-width:640px){
+  /* Header */
+  .topbar{gap:8px}
+  .titleblock .title{font-size:15px}
+  .titleblock .subtitle{font-size:11px}
+  .btn-secondary-on-dark{padding:0 10px;font-size:13px}
+  .avatar{width:36px;height:36px}
+  /* Container */
+  .container{padding:0 var(--sp-2) 80px;transform:translateY(-16px)}
+  /* Grid → 1 coluna */
+  .grid{grid-template-columns:1fr!important;gap:12px}
+  /* KPI → 3 colunas compactas */
+  .kpi{grid-template-columns:repeat(3,1fr)!important;gap:8px}
+  .kpi .kcard{padding:10px}
+  .kpi .kcard .v{font-size:18px}
+  /* Tabs */
+  .tabs{gap:4px}
+  .pill{font-size:12px;padding:6px 8px}
+  /* Task items */
+  .task{grid-template-columns:44px 1fr var(--hit);gap:8px;padding:10px}
+  .ico{width:44px;height:44px;font-size:22px;border-radius:12px}
+  .task .title{font-size:15px}
+  /* Formulário de tarefa → empilha verticalmente */
+  .task-form-grid{grid-template-columns:1fr 1fr!important}
+  .task-form-grid label:first-child{grid-column:1}
+  .task-form-grid label:nth-child(2){grid-column:1 / -1}
+  .task-form-grid label:nth-child(3){grid-column:1}
+  .task-form-grid label:nth-child(4){grid-column:2}
+  .task-form-grid label:nth-child(5){grid-column:1}
+  .task-form-grid button[type=submit]{grid-column:2;align-self:end}
+  /* Tabelas → scroll horizontal */
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .table{min-width:520px}
+  /* Modais */
+  .modal{border-radius:var(--r-card) var(--r-card) 0 0;max-height:90vh;overflow-y:auto}
+  .overlay{align-items:flex-end;padding:0}
+  /* Cards de configuração */
+  .card .bd form[style*="grid-template-columns: 1fr 1fr"]{display:flex!important;flex-direction:column!important}
+  /* Botões do header */
+  #btnChild,#btnParent{padding:0 12px;font-size:12px;height:36px}
+  /* Tiles da criança */
+  .summary{gap:8px}
+  .tile{padding:12px}
+  .tile .v{font-size:18px}
+  /* Progress bar labels */
+  .progress-row{font-size:12px}
+  /* Goal card na criança */
+  #childGoalsCard .hd h2{font-size:16px}
+}
+@media(max-width:380px){
+  .titleblock .subtitle{display:none}
+  .task-form-grid{grid-template-columns:1fr!important}
+  .task-form-grid label,.task-form-grid button{grid-column:1!important}
+}
+/* ── Fim mobile ── */
+
 @keyframes tileReveal{from{opacity:0;transform:scale(.85) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
 @keyframes starBurst{0%{transform:scale(.4);opacity:0}65%{transform:scale(1.2)}100%{transform:scale(1);opacity:1}}
 @keyframes taskSlideIn{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:translateX(0)}}
@@ -207,7 +264,7 @@
       <section class="card" id="panelApprovals">
         <div class="hd"><h2>Aprovações do dia</h2><div class="meta">clique em ★ para aprovar com 1–5 estrelas</div></div>
         <div class="bd">
-          <table class="table"><thead><tr><th>Tarefa</th><th>⭐</th><th>Tempo</th><th>Status</th><th>Ações</th></tr></thead><tbody id="approvalsBody"></tbody></table>
+          <div class="table-wrap"><table class="table"><thead><tr><th>Tarefa</th><th>⭐</th><th>Tempo</th><th>Status</th><th>Ações</th></tr></thead><tbody id="approvalsBody"></tbody></table></div>
         </div>
       </section>
 
@@ -237,7 +294,7 @@
         <div class="hd"><h2>Tarefas cadastradas</h2><div class="meta">cadastre, edite e ajuste</div></div>
         <div class="bd">
           <form id="addTaskForm" style="margin-bottom:12px">
-            <div style="display:grid;grid-template-columns:150px 1fr 110px 160px 140px auto;gap:8px;align-items:end">
+            <div class="task-form-grid" style="display:grid;grid-template-columns:150px 1fr 110px 160px 140px auto;gap:8px;align-items:end">
               <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Ícone
                 <select class="input" id="fIcon"></select>
               </label>
@@ -284,7 +341,7 @@
               </div>
             </div>
           </form>
-          <table class="table"><thead><tr><th>Ícone</th><th>Tarefa</th><th>⭐</th><th>Dias</th><th>Tipo</th><th>Ações</th></tr></thead><tbody id="tasksBody"></tbody></table>
+          <div class="table-wrap"><table class="table"><thead><tr><th>Ícone</th><th>Tarefa</th><th>⭐</th><th>Dias</th><th>Tipo</th><th>Ações</th></tr></thead><tbody id="tasksBody"></tbody></table></div>
         </div>
       </section>
 
@@ -1176,9 +1233,16 @@ function renderChild(){
 
   const root=$('#tasks'); root.innerHTML='';
   const today=getTodayISO();
+  const week=getWeekRange();
   const cid = activeChildId();
- const tlist = tasksForChild(cid);
- const insts = instancesForChild(cid).filter(i=>i.date===today).sort((a,b)=>tlist.findIndex(t=>t.id===a.taskId)-tlist.findIndex(t=>t.id===b.taskId));
+  const tlist = tasksForChild(cid);
+  // Diária/custom → instância de hoje | Semanal → qualquer instância desta semana
+  const insts = tlist.map(task=>{
+    if(task.frequency==='weekly'){
+      return instancesForChild(cid).find(i=>i.taskId===task.id && i.date>=week.start && i.date<=week.end);
+    }
+    return instancesForChild(cid).find(i=>i.taskId===task.id && i.date===today);
+  }).filter(Boolean).sort((a,b)=>tlist.findIndex(t=>t.id===a.taskId)-tlist.findIndex(t=>t.id===b.taskId));
   let hasRunningTimer=false;
   insts.forEach(inst=>{
     const task=tlist.find(t=>t.id===inst.taskId); if(!task) return;
