@@ -101,7 +101,7 @@
 .avatar{width:44px;height:44px;border-radius:var(--r-pill);background:linear-gradient(135deg,#ffd36b,#ff8fb1);border:1px solid rgba(255,255,255,.25);box-shadow:rgba(0,0,0,.22) 0 10px 18px -10px;flex:none}
 .titleblock .title{font-weight:600;font-size:18px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .titleblock .subtitle{font-size:14px;color:rgba(255,255,255,.78)}
-.container{max-width:1040px;margin:0 auto;padding:0 var(--sp-4) var(--sp-7);transform:translateY(-28px);position:relative;z-index:2}
+.container{max-width:1040px;margin:0 auto;padding:24px var(--sp-4) var(--sp-7);transform:translateY(-28px);position:relative;z-index:2}
 .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.app{background:linear-gradient(180deg,var(--navy) 0,var(--navy) 280px,var(--surface) 280px)}.container{padding-bottom:96px}}
 .card{background:var(--canvas);border:1px solid var(--hairline);border-radius:var(--r-card);box-shadow:var(--sh-2)}
@@ -216,15 +216,12 @@
           <div class="hd"><h2>Tarefas de hoje</h2><div class="meta" id="todayLabel"></div></div>
           <div class="bd">
             <input type="file" id="avatarFileInput" accept="image/*" style="display:none" />
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
-              <div style="display:flex;align-items:center;gap:12px">
-                <div class="child-avatar-display" id="childAvatarDisplay">👧</div>
-                <div>
-                  <div style="font-weight:700;font-size:18px">Olá, <span id="childName">Criança</span>!</div>
-                  <div style="color:var(--slate);font-size:14px">Marque as tarefas e espere a aprovação 😊</div>
-                </div>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+              <div class="child-avatar-display" id="childAvatarDisplay">👧</div>
+              <div>
+                <div style="font-weight:700;font-size:18px">Olá, <span id="childName">Criança</span>!</div>
+                <div style="color:var(--slate);font-size:14px">Marque as tarefas e espere a aprovação 😊</div>
               </div>
-              <button class="btn btn-primary" id="goParentDash" type="button">📊 Painel</button>
             </div>
             <div class="tasks" id="tasks"></div>
           </div>
@@ -1952,7 +1949,6 @@ function bindEvents(){
   // top
   $('#btnChild').addEventListener('click', ()=>{ showMode('child'); renderAll(); });
   $('#btnParent').addEventListener('click', openPinModal);
-  $('#goParentDash').addEventListener('click', openPinModal);
 
   // pin
   $('#pinClose').addEventListener('click', closePinModal);
@@ -2202,6 +2198,17 @@ function init(){
       }
     }catch(e){ setCloudStatus('error','Erro no Supabase'); }
   })();
+
+  // Auto-sync: detecta ações feitas em outros dispositivos
+  document.addEventListener('visibilitychange', async ()=>{
+    if(document.visibilityState!=='visible') return;
+    if(!supabaseClient || !state.familyId || !state.childId) return;
+    try{ await loadTaskInstancesFromSupabase(); renderAll(); }catch(e){}
+  });
+  setInterval(()=>{
+    if(document.hidden || !supabaseClient || !state.familyId || !state.childId) return;
+    loadTaskInstancesFromSupabase().then(()=>renderAll()).catch(()=>{});
+  }, 30000);
 
   // Versão automática via CHANGELOG.md
   (async()=>{
