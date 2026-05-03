@@ -704,7 +704,7 @@ async function loadTasksFromSupabase(){
       .order('created_at',{ascending:true});
   }
   ({data,error}=await supabaseClient.from('tasks')
-    .select('id,title,points,frequency,family_id,child_id,icon,tint,reward_type,created_at')
+    .select('id,title,points,frequency,days,family_id,child_id,icon,tint,reward_type,created_at')
     .eq('family_id', state.familyId)
     .eq('child_id', state.childId)
     .order('created_at',{ascending:true}));
@@ -718,6 +718,7 @@ async function loadTasksFromSupabase(){
     title:r.title||'Tarefa',
     points:(typeof r.points==='number')?Math.max(1,Math.min(5,r.points)):1,
     frequency:r.frequency||'daily',
+    days:Array.isArray(r.days)?r.days:null,
     rewardType:(r.reward_type||'money'),
     icon:(r.icon||'✅'),
     tint:(r.tint|| (idx%2?'peach':'mint'))
@@ -876,10 +877,10 @@ function closeEditGoal(){
 async function updateTaskInSupabase(task){
   if(!supabaseClient) return true;
   try{
-    const payload={title:task.title,points:task.points,frequency:task.frequency,icon:task.icon,tint:task.tint,reward_type:task.rewardType};
+    const payload={title:task.title,points:task.points,frequency:task.frequency,days:task.days||null,icon:task.icon,tint:task.tint,reward_type:task.rewardType};
     const {error}=await supabaseClient.from('tasks').update(payload).eq('id',task.id);
     if(!error) return true;
-    const basic={title:task.title,points:task.points,frequency:task.frequency};
+    const basic={title:task.title,points:task.points,frequency:task.frequency,days:task.days||null};
     const r2=await supabaseClient.from('tasks').update(basic).eq('id',task.id);
     return !r2.error;
   }catch(e){console.error('[Supabase] update task',e);return false;}
@@ -1233,11 +1234,11 @@ function bindEvents(){
     const task={id:'t'+Math.random().toString(36).slice(2,9),title,icon,tint,points,frequency,days,rewardType,childId:activeChildId()};
     if(supabaseClient && state.familyId){
       try{
-        const payload={title,points,frequency,family_id:state.familyId,icon,tint,reward_type:rewardType};
+        const payload={title,points,frequency,days:days||null,family_id:state.familyId,icon,tint,reward_type:rewardType};
         if(state.childId) payload.child_id=state.childId;
         const {data,error}=await supabaseClient.from('tasks').insert(payload).select().single();
         if(error){
-          const basic={title,points,frequency,family_id:state.familyId};
+          const basic={title,points,frequency,days:days||null,family_id:state.familyId};
           if(state.childId) basic.child_id=state.childId;
           const r2=await supabaseClient.from('tasks').insert(basic).select().single();
           if(!r2.error && r2.data?.id) task.id=r2.data.id;
