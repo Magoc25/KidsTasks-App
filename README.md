@@ -93,103 +93,117 @@ Suporta múltiplas crianças por família, cada uma com suas próprias tarefas, 
 2. Clique em **+ New query**
 3. Cole o bloco abaixo e clique em **Run** (▶)
 
-**Bloco 1 — Tabelas:**
+**Bloco 1 — Limpar tabelas existentes (se houver):**
 ```sql
-create table if not exists public.families (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  created_at timestamptz not null default now()
+DROP TABLE IF EXISTS public.goals            CASCADE;
+DROP TABLE IF EXISTS public.weekly_payments  CASCADE;
+DROP TABLE IF EXISTS public.task_instances   CASCADE;
+DROP TABLE IF EXISTS public.tasks            CASCADE;
+DROP TABLE IF EXISTS public.children         CASCADE;
+DROP TABLE IF EXISTS public.families         CASCADE;
+```
+
+**Bloco 2 — Criar tabelas (schema v2.0):**
+```sql
+CREATE TABLE public.families (
+  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       text        NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 
-create table if not exists public.children (
-  id uuid primary key default gen_random_uuid(),
-  family_id uuid not null references public.families(id) on delete cascade,
-  name text not null,
+CREATE TABLE public.children (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  family_id    uuid        NOT NULL REFERENCES public.families(id) ON DELETE CASCADE,
+  name         text        NOT NULL,
   avatar_color text,
-  created_at timestamptz not null default now()
+  created_at   timestamptz NOT NULL DEFAULT now()
 );
 
-create table if not exists public.tasks (
-  id uuid primary key default gen_random_uuid(),
-  family_id uuid not null references public.families(id) on delete cascade,
-  child_id uuid references public.children(id) on delete set null,
-  title text not null,
-  description text,
-  points integer not null default 0,
-  frequency text not null default 'daily',
-  is_active boolean not null default true,
-  created_at timestamptz not null default now()
+CREATE TABLE public.tasks (
+  id             uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  family_id      uuid        NOT NULL REFERENCES public.families(id) ON DELETE CASCADE,
+  child_id       uuid        REFERENCES public.children(id) ON DELETE SET NULL,
+  title          text        NOT NULL,
+  points         integer     NOT NULL DEFAULT 1 CHECK (points BETWEEN 1 AND 5),
+  frequency      text        NOT NULL DEFAULT 'daily',
+  is_active      boolean     NOT NULL DEFAULT true,
+  icon           text        NOT NULL DEFAULT '✅',
+  tint           text        NOT NULL DEFAULT 'mint',
+  reward_type    text        NOT NULL DEFAULT 'money',
+  days           jsonb       DEFAULT NULL,
+  target_minutes integer     DEFAULT NULL,
+  created_at     timestamptz NOT NULL DEFAULT now()
 );
 
-create table if not exists public.task_instances (
-  id uuid primary key default gen_random_uuid(),
-  family_id uuid not null references public.families(id) on delete cascade,
-  child_id uuid not null references public.children(id) on delete cascade,
-  task_id uuid not null references public.tasks(id) on delete cascade,
-  date date not null,
-  status text not null default 'pending',
-  created_at timestamptz not null default now()
+CREATE TABLE public.task_instances (
+  id               uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  family_id        uuid        NOT NULL REFERENCES public.families(id) ON DELETE CASCADE,
+  child_id         uuid        NOT NULL REFERENCES public.children(id) ON DELETE CASCADE,
+  task_id          uuid        NOT NULL REFERENCES public.tasks(id)    ON DELETE CASCADE,
+  date             date        NOT NULL,
+  status           text        NOT NULL DEFAULT 'pending',
+  approved_stars   integer     CHECK (approved_stars BETWEEN 1 AND 5),
+  elapsed_seconds  integer     DEFAULT NULL,
+  timer_started_at timestamptz DEFAULT NULL,
+  created_at       timestamptz NOT NULL DEFAULT now()
 );
 
-create table if not exists public.weekly_payments (
-  id uuid primary key default gen_random_uuid(),
-  family_id uuid not null references public.families(id) on delete cascade,
-  child_id uuid not null references public.children(id) on delete cascade,
-  week_start_date date not null,
-  week_end_date date not null,
-  total_points integer not null default 0,
-  paid_at timestamptz,
-  created_at timestamptz not null default now(),
-  constraint weekly_payments_unique_week
-    unique (family_id, child_id, week_start_date, week_end_date)
+CREATE TABLE public.weekly_payments (
+  id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  family_id       uuid        NOT NULL REFERENCES public.families(id) ON DELETE CASCADE,
+  child_id        uuid        NOT NULL REFERENCES public.children(id) ON DELETE CASCADE,
+  week_start_date date        NOT NULL,
+  week_end_date   date        NOT NULL,
+  total_points    integer     NOT NULL DEFAULT 0,
+  paid_at         timestamptz,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT weekly_payments_unique_week
+    UNIQUE (family_id, child_id, week_start_date, week_end_date)
+);
+
+CREATE TABLE public.goals (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  family_id    uuid        NOT NULL REFERENCES public.families(id) ON DELETE CASCADE,
+  child_id     uuid        NOT NULL REFERENCES public.children(id) ON DELETE CASCADE,
+  title        text        NOT NULL,
+  icon         text        NOT NULL DEFAULT '🎯',
+  target_stars integer     NOT NULL DEFAULT 30 CHECK (target_stars >= 1),
+  delivered    boolean     NOT NULL DEFAULT false,
+  delivered_at timestamptz,
+  created_at   timestamptz NOT NULL DEFAULT now()
 );
 ```
 
-4. Após o **Run** aparecer ✅, clique em **+ New query** novamente e cole o próximo bloco
-
-**Bloco 2 — Índices de performance:**
+**Bloco 3 — Índices de performance:**
 ```sql
-create index if not exists idx_children_family_id
-  on public.children(family_id);
-
-create index if not exists idx_tasks_family_id
-  on public.tasks(family_id);
-
-create index if not exists idx_task_instances_family_child_date
-  on public.task_instances(family_id, child_id, date);
-
-create index if not exists idx_weekly_payments_family_child_week
-  on public.weekly_payments(family_id, child_id, week_start_date, week_end_date);
+CREATE INDEX idx_children_family_id          ON public.children(family_id);
+CREATE INDEX idx_tasks_family_child          ON public.tasks(family_id, child_id);
+CREATE INDEX idx_task_instances_family_child ON public.task_instances(family_id, child_id, date);
+CREATE INDEX idx_weekly_payments_family      ON public.weekly_payments(family_id, child_id, week_start_date, week_end_date);
+CREATE INDEX idx_goals_family_child          ON public.goals(family_id, child_id);
 ```
 
-**Bloco 3 — Ativar segurança (RLS):**
+**Bloco 4 — Ativar segurança (RLS):**
 ```sql
-alter table public.families enable row level security;
-alter table public.children enable row level security;
-alter table public.tasks enable row level security;
-alter table public.task_instances enable row level security;
-alter table public.weekly_payments enable row level security;
+ALTER TABLE public.families        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.children        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tasks           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.task_instances  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.weekly_payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.goals           ENABLE ROW LEVEL SECURITY;
 ```
 
-**Bloco 4 — Permissões de acesso:**
+**Bloco 5 — Permissões de acesso (single-tenant):**
 ```sql
-create policy "families_all_anon_single_tenant"
-  on public.families for all to anon using (true) with check (true);
-
-create policy "children_all_anon_single_tenant"
-  on public.children for all to anon using (true) with check (true);
-
-create policy "tasks_all_anon_single_tenant"
-  on public.tasks for all to anon using (true) with check (true);
-
-create policy "task_instances_all_anon_single_tenant"
-  on public.task_instances for all to anon using (true) with check (true);
-
-create policy "weekly_payments_all_anon_single_tenant"
-  on public.weekly_payments for all to anon using (true) with check (true);
+CREATE POLICY "families_anon"        ON public.families        FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "children_anon"        ON public.children        FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "tasks_anon"           ON public.tasks           FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "task_instances_anon"  ON public.task_instances  FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "weekly_payments_anon" ON public.weekly_payments FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "goals_anon"           ON public.goals           FOR ALL TO anon USING (true) WITH CHECK (true);
 ```
 
-5. Execute cada bloco separadamente. Ao final, vá em **Table Editor** e confirme que as 5 tabelas aparecem: `families`, `children`, `tasks`, `task_instances`, `weekly_payments`.
+5. Execute cada bloco separadamente. Ao final, vá em **Table Editor** e confirme que as **6 tabelas** aparecem: `families`, `children`, `tasks`, `task_instances`, `weekly_payments`, `goals`.
 
 ---
 

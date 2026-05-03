@@ -723,11 +723,18 @@ function ensureInstancesForToday(){
   const today=getTodayISO();
   const existing=new Set(instancesForChild(cid).filter(i=>i.date===today).map(i=>i.taskId));
   const todayDay=new Date().getDay();
+  const week=getWeekRange();
   tasksForChild(cid).forEach(t=>{
+    // custom: só nos dias selecionados
     if(t.frequency==='custom'){
       if(!Array.isArray(t.days)||!t.days.includes(todayDay)) return;
     }
-    if(!existing.has(t.id)) (state.instances||[]).push({id:`i-${t.id}-${today}-${cid}`,childId:cid,taskId:t.id,date:today,status:'pending',approvedStars:null});
+    // weekly: só uma instância por semana
+    if(t.frequency==='weekly'){
+      const hasThisWeek=instancesForChild(cid).some(i=>i.taskId===t.id && i.date>=week.start && i.date<=week.end);
+      if(hasThisWeek) return;
+    }
+    if(!existing.has(t.id)) (state.instances||[]).push({id:`i-${t.id}-${today}-${cid}`,childId:cid,taskId:t.id,date:today,status:'pending',approvedStars:null,elapsedSeconds:null,timerStartedAt:null});
   });
 }
 
