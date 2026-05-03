@@ -523,11 +523,11 @@ function formatDays(freq,days){
   if(freq==='daily') return 'Diária';
   if(freq==='weekly') return 'Semanal';
   if(!Array.isArray(days)||!days.length) return 'Personalizado';
-  const s=[...days].sort((a,b)=>a-b);
-  if(s.join()====='1,2,3,4,5') return 'Seg–Sex';
-  if(s.join()==='0,6') return 'Fim de semana';
-  if(s.length===7) return 'Todos os dias';
-  return s.map(d=>DAY_NAMES[d]).join(' ');
+  const s=[...days].sort((a,b)=>a-b).join(',');
+  if(s==='1,2,3,4,5') return 'Seg–Sex';
+  if(s==='0,6') return 'Fim de semana';
+  if(s==='0,1,2,3,4,5,6') return 'Todos os dias';
+  return s.split(',').map(d=>DAY_NAMES[parseInt(d)]).join(' ');
 }
 function getSelectedDays(pickerId){
   const el=document.getElementById(pickerId); if(!el) return [];
