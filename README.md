@@ -1,6 +1,6 @@
 # 👧 KidsTasks
 
-> **App de tarefas e mesada para crianças — gerencie tarefas diárias, aprove conclusões e calcule a recompensa semanal.**
+> **App de tarefas e mesada para crianças — gerencie tarefas diárias, aprove com estrelas e acompanhe metas e recompensas.**
 
 Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 
@@ -8,7 +8,7 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 > Não representa, não é financiado e não tem vínculo institucional com o IFMA
 > ou qualquer outra organização.
 
-[![Versão](https://img.shields.io/badge/versão-1.0.0-blue)](#changelog)
+[![Versão](https://img.shields.io/badge/versão-2.0.0-blue)](#changelog)
 [![Licença](https://img.shields.io/badge/licença-uso%20pessoal%20livre-green)](#licença)
 [![PIX](https://img.shields.io/badge/apoie-PIX-brightgreen)](#apoiar)
 
@@ -18,19 +18,23 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 
 O **KidsTasks** é um Progressive Web App (PWA) para famílias que querem organizar as tarefas das crianças e vincular a conclusão delas a recompensas financeiras semanais — de forma simples, segura e sem precisar instalar nada.
 
-O app funciona no modo **Criança** (marca tarefas concluídas) e modo **Responsável** (aprova tarefas e registra o pagamento semanal). Tudo funciona offline e pode ser sincronizado opcionalmente com o Supabase para uso em múltiplos dispositivos.
+O app funciona no modo **Criança** (marca tarefas e acompanha metas) e modo **Responsável** (aprova tarefas com 1–5 ⭐, gerencia crianças, metas e pagamentos). Tudo funciona offline e pode ser sincronizado opcionalmente com o Supabase para uso em múltiplos dispositivos.
 
-Ideal para crianças a partir de 3 anos, com interface de ícones grandes e poucos elementos visuais para não sobrecarregar.
+Suporta múltiplas crianças por família, cada uma com suas próprias tarefas, metas e progresso independentes.
 
 ---
 
 ## 🚀 Funcionalidades
 
-- **Modo Criança** — visualiza tarefas do dia e marca como concluídas
-- **Modo Responsável** — aprova/reprova tarefas, protegido por PIN
-- **Recompensa semanal** — calcula pontos acumulados e registra o pagamento
+- **Modo Criança** — visualiza tarefas do dia, marca como concluídas e acompanha metas
+- **Modo Responsável** — aprova tarefas com 1–5 ⭐, protegido por PIN
+- **Aprovação com estrelas** — de 1 a 5 ⭐ por tarefa aprovada
+- **Multi-criança** — tarefas, metas e progresso separados por criança
+- **Metas e recompensas** — acumule ⭐ para conquistar presentes e recompensas
+- **Conversão ⭐ → R$** — configure quanto vale cada estrela em dinheiro
+- **Tipo de tarefa** — 💰 Dinheiro (converte em R$) ou 🏆 Meta (acumula para conquistas)
+- **Recompensa semanal** — calcula R$ acumulado e registra o pagamento
 - **Offline-first** — funciona sem internet; sincroniza quando conectado
-- **Multi-criança** — suporte a múltiplas crianças na mesma família
 - **Supabase opcional** — sincronização entre dispositivos com seu próprio banco
 - **PWA instalável** — instale como app no Android, iOS, Windows e macOS
 
@@ -40,7 +44,7 @@ Ideal para crianças a partir de 3 anos, com interface de ícones grandes e pouc
 
 ### Cenário 1 — Uso local simples _(sem nuvem)_
 
-1. Baixe o arquivo `KidsTasks.html` para o seu computador
+1. Baixe o arquivo `KidsTasks2.html` para o seu computador
 2. Abra no Chrome, Edge ou Safari
 3. Pronto — os dados ficam salvos no próprio navegador
 
@@ -250,7 +254,7 @@ A partir daí, cadastre as tarefas na aba **Tarefas** e use o app normalmente.
 
 1. Na página do repositório recém-criado, clique em **uploading an existing file**
 2. Arraste ou selecione os arquivos do KidsTasks:
-   - `KidsTasks.html`
+   - `KidsTasks2.html`
    - `sw.js`
    - `manifest.json`
    - `icon-192.png`
@@ -276,10 +280,10 @@ A partir daí, cadastre as tarefas na aba **Tarefas** e use o app normalmente.
 
 A URL do app terá o formato:
 ```
-https://seu-usuario.github.io/KidsTasks-App/KidsTasks.html
+https://seu-usuario.github.io/KidsTasks-App/KidsTasks2.html
 ```
 
-> ⚠️ A URL sem o nome do arquivo (`/KidsTasks-App/`) retorna erro 404 — sempre use a URL completa com `KidsTasks.html` no final.
+> ⚠️ A URL sem o nome do arquivo (`/KidsTasks-App/`) retorna erro 404 — sempre use a URL completa com `KidsTasks2.html` no final.
 
 Cole essa URL no navegador de qualquer dispositivo para acessar o app. Para instalar como aplicativo, veja a seção abaixo.
 
