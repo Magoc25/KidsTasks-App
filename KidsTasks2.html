@@ -1786,10 +1786,14 @@ async function loadWeekHistoryFromSupabase(){
       const existing=state.weekHistory.find(h=>h.id===histId);
       const child=state.childrenList.find(c=>c.id===row.child_id);
       const gs=row.goal_stars||0, ts=row.total_points||0;
+      // money_stars não está na tabela; usa moneyBRL local se disponível (archiveWeek calcula corretamente)
+      // A fórmula (ts-gs) subestima quando há tarefas tipo "Ambos" (moneyStars==goalStars)
+      const ms=row.money_stars!=null?row.money_stars:null;
+      const computedMoney=ms!=null?ms*rate:(existing?.moneyBRL??((ts-gs)*rate));
       const entry={
         id:histId, childId:row.child_id, childName:child?.name||'Criança',
         weekStart:row.week_start_date, weekEnd:row.week_end_date,
-        totalStars:ts, moneyBRL:(ts-gs)*rate, goalStars:gs,
+        totalStars:ts, moneyBRL:computedMoney, goalStars:gs,
         tasksApproved:existing?.tasksApproved||0,
         paid:!!row.paid_at, paidAt:row.paid_at||null
       };
@@ -1845,8 +1849,9 @@ function renderHistory(){
     const paidLabel=h.paid
       ?`<span class="badge ok">✅ Pago em ${new Date(h.paidAt).toLocaleDateString('pt-BR')}</span>`
       :`<button type="button" onclick="markHistoryPaid('${h.id}')" class="btn btn-primary" style="height:36px;font-size:13px">💳 Marcar pago</button>`;
-    // Estrelas monetárias = totalStars - goalStars
-    const moneyStars=h.totalStars-(h.goalStars||0);
+    // Estrelas monetárias: deriva de moneyBRL e taxa (evita fórmula errada ts-gs com tarefas 'Ambos')
+    const _rate=parseFloat(state.pointValueBRL)||0.10;
+    const moneyStars=_rate>0?Math.round(h.moneyBRL/_rate):0;
     div.innerHTML=`
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
         <div>
@@ -1958,8 +1963,13 @@ async function registerWeeklyPayment(){
  const tmap=new Map(tasksForChild(cid).map(t=>[t.id,t]));
  const totalStars=approved.reduce((sum,inst)=>{const task=tmap.get(inst.taskId); return sum+(task?getInstanceStars(inst,task):0);},0);
  if(!totalStars) return toast('Sem ⭐ aprovadas na semana','error');
- let goalStars=0;
- approved.forEach(inst=>{const task=tmap.get(inst.taskId); if(!task) return; const rt=task.rewardType||'money'; if(rt==='goal'||rt==='both') goalStars+=getInstanceStars(inst,task);});
+ let goalStars=0, moneyStars=0;
+ approved.forEach(inst=>{const task=tmap.get(inst.taskId); if(!task) return; const s=getInstanceStars(inst,task); const rt=task.rewardType||'money';
+   if(rt==='goal'||rt==='both') goalStars+=s;
+   if(rt==='money'||rt==='both') moneyStars+=s;
+ });
+ const rate=parseFloat(state.pointValueBRL)||0.10;
+ const moneyBRL=moneyStars*rate;
  const paidAt=new Date().toISOString();
  const payload={family_id:state.familyId, child_id:state.childId, week_start_date:week.start, week_end_date:week.end, total_points:totalStars, goal_stars:goalStars, paid_at:paidAt};
  const {error}=await supabaseClient.from('weekly_payments').upsert(payload,{onConflict:'family_id,child_id,week_start_date,week_end_date'});
@@ -1968,10 +1978,9 @@ async function registerWeeklyPayment(){
  // Atualiza histórico local se existir entrada
  if(state.weekHistory){
    const entry=state.weekHistory.find(h=>h.childId===cid && h.weekStart===week.start);
-   if(entry){ entry.paid=true; entry.paidAt=paidAt; }
+   if(entry){ entry.paid=true; entry.paidAt=paidAt; entry.moneyBRL=moneyBRL; }
    else{
-     const rate=parseFloat(state.pointValueBRL)||0.10;
-     state.weekHistory.unshift({id:`hist_${cid}_${week.start}`,childId:cid,childName:(state.childrenList.find(c=>c.id===cid)?.name)||'Criança',weekStart:week.start,weekEnd:week.end,totalStars,moneyBRL:(totalStars-goalStars)*rate,goalStars,tasksApproved:approved.length,paid:true,paidAt});
+     state.weekHistory.unshift({id:`hist_${cid}_${week.start}`,childId:cid,childName:(state.childrenList.find(c=>c.id===cid)?.name)||'Criança',weekStart:week.start,weekEnd:week.end,totalStars,moneyBRL,goalStars,tasksApproved:approved.length,paid:true,paidAt});
    }
  }
  saveState();
