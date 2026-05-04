@@ -1046,12 +1046,20 @@ function toast(msg,kind='info'){
 }
 
 function formatDateBR(){return new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'});} 
-function getTodayISO(){return new Date().toISOString().slice(0,10);} 
+// Data no horário de Brasília (UTC-3) — evita virada de dia às 21h
+function getTodayISO(){
+  return new Date().toLocaleDateString('fr-CA',{timeZone:'America/Sao_Paulo'});
+}
 function getWeekRange(){
-  const d=new Date();const day=d.getDay();const sunday=new Date(d);sunday.setDate(d.getDate()-day);
-  const saturday=new Date(sunday);saturday.setDate(sunday.getDate()+6);
-  const fmt=dt=>dt.toISOString().slice(0,10);
-  return {start:fmt(sunday), end:fmt(saturday)};
+  const today=getTodayISO();
+  const [y,m,d]=today.split('-').map(Number);
+  const date=new Date(y,m-1,d); // meia-noite local — aritmética sem fuso
+  const day=date.getDay(); // 0=Dom, 6=Sáb
+  const sun=new Date(y,m-1,d-day);
+  const sat=new Date(y,m-1,d-day+6);
+  const pad=n=>String(n).padStart(2,'0');
+  const fmt=dt=>`${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}`;
+  return {start:fmt(sun),end:fmt(sat)};
 }
 function getInstanceStars(inst, task){
   const base=(task && typeof task.points==='number')?task.points:1;
@@ -1668,24 +1676,26 @@ function renderChildrenList(){
     const uploadBtn=document.createElement('button'); uploadBtn.className='avatar-upload-btn'; uploadBtn.type='button';
     uploadBtn.textContent=child.avatarData?'📷 Alterar foto':'📷 Adicionar foto';
     uploadBtn.addEventListener('click',()=>{ $('#avatarFileInput').dataset.childId=child.id; $('#avatarFileInput').click(); });
-    // Chave PIX por criança
-    const pixRow=document.createElement('div');
-    pixRow.style.cssText='margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap';
-    const pixInput=document.createElement('input');
-    pixInput.className='input'; pixInput.placeholder='Chave PIX da criança';
-    pixInput.title='CPF, email, telefone ou chave aleatória'; pixInput.style.cssText='flex:1;min-width:0;height:36px;font-size:13px';
-    pixInput.value=(state.childPixKeys||{})[child.id]||'';
-    const pixSaveBtn=document.createElement('button');
-    pixSaveBtn.className='btn btn-secondary'; pixSaveBtn.type='button';
-    pixSaveBtn.style.height='36px'; pixSaveBtn.textContent='💾 Salvar PIX';
-    pixSaveBtn.addEventListener('click',()=>{ saveChildPixKey(child.id, pixInput.value); toast('Chave PIX salva ✅','ok'); });
-    pixRow.append(pixInput, pixSaveBtn);
-    mid.append(title,sub,uploadBtn,pixRow);
+    mid.append(title,sub,uploadBtn);
     const btn=document.createElement('button'); btn.className='btn '+(child.id===state.childId?'btn-primary':'btn-secondary'); btn.style.height='40px'; btn.textContent=(child.id===state.childId)?'Ativa':'Ativar';
     btn.addEventListener('click', async ()=>{ state.childId=child.id; saveState(); toast('Criança ativa: '+child.name,'ok');
       if(supabaseClient && state.familyId){ await loadTasksFromSupabase().catch(()=>{}); await loadTaskInstancesFromSupabase().catch(()=>{}); await loadGoalsFromSupabase().catch(()=>{}); }
       ensureInstancesForToday(); renderAll(); });
     item.append(ico,mid,btn); el.appendChild(item);
+    // Chave PIX — fora do grid .task para não causar overflow
+    const pixRow=document.createElement('div');
+    pixRow.style.cssText='display:flex;gap:6px;align-items:center;padding:6px 8px 8px;margin-top:-2px;background:var(--surface);border:1px solid var(--hairline);border-top:none;border-radius:0 0 var(--r-card) var(--r-card);margin-bottom:4px';
+    const pixLbl=document.createElement('span'); pixLbl.style.cssText='font-size:12px;color:var(--slate);white-space:nowrap;flex:none'; pixLbl.textContent='PIX:';
+    const pixInput=document.createElement('input');
+    pixInput.className='input'; pixInput.placeholder='Chave PIX da criança (CPF, email, tel.)';
+    pixInput.style.cssText='flex:1;min-width:0;height:32px;font-size:12px';
+    pixInput.value=(state.childPixKeys||{})[child.id]||'';
+    const pixSaveBtn=document.createElement('button');
+    pixSaveBtn.className='btn btn-secondary'; pixSaveBtn.type='button';
+    pixSaveBtn.style.cssText='height:32px;font-size:11px;padding:0 10px;flex:none'; pixSaveBtn.textContent='💾';
+    pixSaveBtn.title='Salvar chave PIX';
+    pixSaveBtn.addEventListener('click',()=>{ saveChildPixKey(child.id, pixInput.value); toast('Chave PIX salva ✅','ok'); });
+    pixRow.append(pixLbl,pixInput,pixSaveBtn); el.appendChild(pixRow);
   });
 }
 
@@ -2219,9 +2229,14 @@ async function unmarkHistoryPaid(histId){
   entry.paid=false; entry.paidAt=null; saveState();
   if(entry.weekStart===getWeekRange().start) state.weekPaid=false;
   if(supabaseClient&&state.familyId){
-    await supabaseClient.from('weekly_payments').update({paid_at:null})
-      .eq('family_id',state.familyId).eq('child_id',entry.childId)
-      .eq('week_start_date',entry.weekStart).catch(e=>console.error('[History] unmark',e));
+    // Upsert com paid_at:null é mais confiável que UPDATE (garante que a linha existe com o valor correto)
+    const {error}=await supabaseClient.from('weekly_payments').upsert({
+      family_id:state.familyId, child_id:entry.childId,
+      week_start_date:entry.weekStart, week_end_date:entry.weekEnd,
+      total_points:entry.totalStars||0, goal_stars:entry.goalStars||0,
+      paid_at:null
+    },{onConflict:'family_id,child_id,week_start_date,week_end_date'});
+    if(error){ toast('Erro ao atualizar Supabase: '+error.message,'error'); return; }
   }
   updateHistoryBadge(); renderHistory(); renderAll();
   toast('Pagamento desmarcado ✅','ok');
