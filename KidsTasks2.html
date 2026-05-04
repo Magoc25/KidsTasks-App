@@ -487,6 +487,28 @@
     </section>
   </main>
 
+  <!-- Payment Modal -->
+  <div class="overlay" id="paymentOverlay" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="mhd"><h3>💳 Pagamento para <span id="payModalChildName"></span></h3><p id="payModalDesc">Escolha como realizar o pagamento.</p></div>
+      <div class="mbd">
+        <div id="payModalSummary" style="text-align:center;padding:12px;background:var(--surface);border-radius:var(--r-btn);margin-bottom:16px;font-size:16px"></div>
+        <div id="payOptions" style="display:flex;flex-direction:column;gap:10px">
+          <button id="payByPixBtn" class="btn btn-primary" type="button">📱 Pagar via PIX</button>
+          <button id="payByCashBtn" class="btn btn-secondary" type="button">💵 Pagar em dinheiro</button>
+          <button id="paymentCloseBtn" class="btn btn-secondary" type="button">Cancelar</button>
+        </div>
+        <div id="payPixSection" class="hidden">
+          <p id="payPixInfo" style="font-size:13px;color:var(--slate);margin:0 0 10px;word-break:break-all"></p>
+          <div id="payPixQrContainer" style="text-align:center;min-height:216px;display:flex;align-items:center;justify-content:center;margin-bottom:8px"></div>
+          <button id="payCopyPixBtn" class="btn btn-secondary" type="button" style="width:100%;margin-bottom:8px">Copiar código PIX</button>
+          <button id="payConfirmBtn" class="btn btn-primary" type="button" style="width:100%">✅ Já paguei — confirmar</button>
+          <button id="payBackBtn" class="btn btn-secondary" type="button" style="width:100%;margin-top:8px">← Voltar às opções</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- PIN Modal -->
   <div class="overlay" id="pinOverlay" role="dialog" aria-modal="true">
     <div class="modal">
@@ -930,6 +952,7 @@ const defaultState={
   weekPaid:false,
   lastWeekStart:'',
   weekHistory:[],
+  childPixKeys:{},
   totalGoalStars:0,
   goals:[],
   tasks:[
@@ -1608,7 +1631,19 @@ function renderChildrenList(){
     const uploadBtn=document.createElement('button'); uploadBtn.className='avatar-upload-btn'; uploadBtn.type='button';
     uploadBtn.textContent=child.avatarData?'📷 Alterar foto':'📷 Adicionar foto';
     uploadBtn.addEventListener('click',()=>{ $('#avatarFileInput').dataset.childId=child.id; $('#avatarFileInput').click(); });
-    mid.append(title,sub,uploadBtn);
+    // Chave PIX por criança
+    const pixRow=document.createElement('div');
+    pixRow.style.cssText='margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap';
+    const pixInput=document.createElement('input');
+    pixInput.className='input'; pixInput.placeholder='Chave PIX da criança';
+    pixInput.title='CPF, email, telefone ou chave aleatória'; pixInput.style.cssText='flex:1;min-width:0;height:36px;font-size:13px';
+    pixInput.value=(state.childPixKeys||{})[child.id]||'';
+    const pixSaveBtn=document.createElement('button');
+    pixSaveBtn.className='btn btn-secondary'; pixSaveBtn.type='button';
+    pixSaveBtn.style.height='36px'; pixSaveBtn.textContent='💾 Salvar PIX';
+    pixSaveBtn.addEventListener('click',()=>{ saveChildPixKey(child.id, pixInput.value); toast('Chave PIX salva ✅','ok'); });
+    pixRow.append(pixInput, pixSaveBtn);
+    mid.append(title,sub,uploadBtn,pixRow);
     const btn=document.createElement('button'); btn.className='btn '+(child.id===state.childId?'btn-primary':'btn-secondary'); btn.style.height='40px'; btn.textContent=(child.id===state.childId)?'Ativa':'Ativar';
     btn.addEventListener('click', async ()=>{ state.childId=child.id; saveState(); toast('Criança ativa: '+child.name,'ok');
       if(supabaseClient && state.familyId){ await loadTasksFromSupabase().catch(()=>{}); await loadTaskInstancesFromSupabase().catch(()=>{}); await loadGoalsFromSupabase().catch(()=>{}); }
@@ -1847,8 +1882,11 @@ function renderHistory(){
       ?`${fmtWeekLabel(h.weekStart,h.weekEnd)} <span style="color:var(--warning);font-size:12px;font-weight:600">· Em andamento</span>`
       :fmtWeekLabel(h.weekStart,h.weekEnd);
     const paidLabel=h.paid
-      ?`<span class="badge ok">✅ Pago em ${new Date(h.paidAt).toLocaleDateString('pt-BR')}</span>`
-      :`<button type="button" onclick="markHistoryPaid('${h.id}')" class="btn btn-primary" style="height:36px;font-size:13px">💳 Marcar pago</button>`;
+      ?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span class="badge ok">✅ Pago em ${new Date(h.paidAt).toLocaleDateString('pt-BR')}</span>
+          <button type="button" onclick="unmarkHistoryPaid('${h.id}')" class="btn btn-secondary" style="height:30px;font-size:12px;padding:0 10px">Desfazer</button>
+        </div>`
+      :`<button type="button" onclick="openPaymentModal('${h.id}')" class="btn btn-primary" style="height:36px;font-size:13px">💳 Marcar pago</button>`;
     // Estrelas monetárias: deriva de moneyBRL e taxa (evita fórmula errada ts-gs com tarefas 'Ambos')
     const _rate=parseFloat(state.pointValueBRL)||0.10;
     const moneyStars=_rate>0?Math.round(h.moneyBRL/_rate):0;
@@ -1986,6 +2024,96 @@ async function registerWeeklyPayment(){
  saveState();
 }
 
+
+// ── Chave PIX por criança ──
+function getChildPixKey(cid){ return (state.childPixKeys||{})[cid]||''; }
+function saveChildPixKey(cid,key){ if(!state.childPixKeys) state.childPixKeys={}; state.childPixKeys[cid]=key.trim(); saveState(); }
+
+// ── Modal de pagamento (PIX ou Dinheiro) ──
+let _payCtx=null, _payPixCode='';
+
+function openPaymentModal(ctx){
+  _payCtx=ctx;
+  const cid=activeChildId();
+  const child=state.childrenList.find(c=>c.id===cid)||{};
+  const pixKey=getChildPixKey(cid);
+  let totalStars=0, moneyBRL=0;
+  if(ctx==='week'){
+    const sum=computeSummary(); totalStars=sum.weekApprovedStars; moneyBRL=sum.moneyBRL;
+  } else {
+    const h=(state.weekHistory||[]).find(h=>h.id===ctx);
+    if(h){ totalStars=h.totalStars; moneyBRL=h.moneyBRL; }
+  }
+  $('#payModalChildName').textContent=child.name||'Criança';
+  $('#payModalSummary').innerHTML=`⭐ <strong>${totalStars}</strong> estrelas · <strong>${moneyBRL.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</strong>`;
+  const pixBtn=$('#payByPixBtn');
+  if(pixKey){ pixBtn.disabled=false; pixBtn.title=''; pixBtn.textContent='📱 Pagar via PIX'; }
+  else{ pixBtn.disabled=true; pixBtn.title='Configure a chave PIX desta criança em Configurações'; pixBtn.textContent='📱 PIX (chave não configurada)'; }
+  $('#payOptions').classList.remove('hidden');
+  $('#payPixSection').classList.add('hidden');
+  $('#paymentOverlay').classList.add('open');
+}
+function closePaymentModal(){ $('#paymentOverlay').classList.remove('open'); _payCtx=null; _payPixCode=''; }
+
+function showPayPixSection(){
+  const cid=activeChildId();
+  const child=state.childrenList.find(c=>c.id===cid)||{};
+  const pixKey=getChildPixKey(cid);
+  let moneyBRL=0;
+  if(_payCtx==='week'){ moneyBRL=computeSummary().moneyBRL; }
+  else{ const h=(state.weekHistory||[]).find(h=>h.id===_payCtx); if(h) moneyBRL=h.moneyBRL; }
+  _payPixCode=pixEmv(pixKey,child.name||'Criança','Brasil',moneyBRL);
+  const encoded=encodeURIComponent(_payPixCode);
+  const qr1='https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=4&data='+encoded;
+  const qr2='https://chart.googleapis.com/chart?chs=200x200&cht=qr&choe=UTF-8&chl='+encoded;
+  $('#payPixQrContainer').innerHTML=`<img src="${qr1}" width="200" height="200" style="border-radius:12px;background:#fff;padding:8px;display:block;margin:0 auto" alt="QR Code PIX"/>`;
+  const img=$('#payPixQrContainer img');
+  if(img) img.onerror=function(){ this.src=qr2; this.onerror=function(){ this.style.display='none'; }; };
+  const amtLabel=moneyBRL>0?moneyBRL.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}):'valor a combinar';
+  $('#payPixInfo').textContent=`Chave PIX: ${pixKey} · Valor: ${amtLabel}`;
+  $('#payOptions').classList.add('hidden');
+  $('#payPixSection').classList.remove('hidden');
+}
+
+async function executePayment(){
+  try{
+    if(_payCtx==='week') await registerWeeklyPayment();
+    else await _markHistoryPaidDirect(_payCtx);
+    closePaymentModal(); toast('Pagamento registrado ✅','ok'); renderAll();
+  }catch(e){ toast('Erro: '+e.message,'error'); }
+}
+
+async function copyPayPixCode(){
+  const btn=$('#payCopyPixBtn');
+  try{ await navigator.clipboard.writeText(_payPixCode); }
+  catch(e){ const t=document.createElement('textarea'); t.value=_payPixCode; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); }
+  btn.textContent='✅ Copiado!'; setTimeout(()=>btn.textContent='Copiar código PIX',2000);
+}
+
+async function _markHistoryPaidDirect(histId){
+  const entry=(state.weekHistory||[]).find(h=>h.id===histId); if(!entry) return;
+  entry.paid=true; entry.paidAt=new Date().toISOString(); saveState();
+  if(supabaseClient&&state.familyId){
+    await supabaseClient.from('weekly_payments').update({paid_at:entry.paidAt})
+      .eq('family_id',state.familyId).eq('child_id',entry.childId)
+      .eq('week_start_date',entry.weekStart).catch(e=>console.error('[History] markPaid',e));
+  }
+  updateHistoryBadge();
+}
+
+async function unmarkHistoryPaid(histId){
+  if(!confirm('Desfazer o registro de pagamento desta semana?')) return;
+  const entry=(state.weekHistory||[]).find(h=>h.id===histId); if(!entry) return;
+  entry.paid=false; entry.paidAt=null; saveState();
+  if(entry.weekStart===getWeekRange().start) state.weekPaid=false;
+  if(supabaseClient&&state.familyId){
+    await supabaseClient.from('weekly_payments').update({paid_at:null})
+      .eq('family_id',state.familyId).eq('child_id',entry.childId)
+      .eq('week_start_date',entry.weekStart).catch(e=>console.error('[History] unmark',e));
+  }
+  updateHistoryBadge(); renderHistory(); renderAll();
+  toast('Pagamento desmarcado ✅','ok');
+}
 
 // Backup local
 function exportBackup(){
@@ -2263,7 +2391,16 @@ function bindEvents(){
 });
 
   // payment
-  $('#btnPaid').addEventListener('click', async ()=>{ try{ await registerWeeklyPayment(); toast('Pagamento registrado ✅','ok'); renderAll(); } catch(e){ toast('Erro ao registrar pagamento','error'); } });
+  $('#btnPaid').addEventListener('click', ()=>openPaymentModal('week'));
+
+  // Modal de pagamento
+  $('#payByPixBtn').addEventListener('click', showPayPixSection);
+  $('#payByCashBtn').addEventListener('click', executePayment);
+  $('#payConfirmBtn').addEventListener('click', executePayment);
+  $('#payCopyPixBtn').addEventListener('click', copyPayPixCode);
+  $('#payBackBtn').addEventListener('click', ()=>{ $('#payOptions').classList.remove('hidden'); $('#payPixSection').classList.add('hidden'); });
+  $('#paymentCloseBtn').addEventListener('click', closePaymentModal);
+  $('#paymentOverlay').addEventListener('click', e=>{ if(e.target.id==='paymentOverlay') closePaymentModal(); });
 
   // pix/reviews
   $('#btnPix').addEventListener('click', openPixModal);
