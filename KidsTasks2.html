@@ -1338,6 +1338,28 @@ function renderChild(){
     } else { dispEl.textContent='👧'; }
   }
   const sum=computeSummary();
+
+  // Fallback semanal: instâncias aprovadas não carregadas mas weekHistory tem dados
+  // Usa o histórico para exibição e dispara reload em background
+  {
+    const _cid=activeChildId();
+    const _wk=getWeekRange();
+    const _hist=(state.weekHistory||[]).find(h=>h.childId===_cid&&h.weekStart===_wk.start);
+    if(sum.weekApprovedStars===0 && _hist && (_hist.totalStars||0)>0){
+      sum.weekApprovedStars=_hist.totalStars||0;
+      sum.weekApprovedCount=_hist.tasksApproved||0;
+      sum.moneyBRL=_hist.moneyBRL||0;
+      sum.goalStars=_hist.goalStars||0;
+      // Reload em background (flag evita loop)
+      if(supabaseClient && state.familyId && state.childId && !renderChild._bgReload){
+        renderChild._bgReload=true;
+        loadTaskInstancesFromSupabase()
+          .then(()=>{ renderChild._bgReload=false; renderAll(); })
+          .catch(()=>{ renderChild._bgReload=false; });
+      }
+    }
+  }
+
   const moneyTile=$('#childMoneyTile');
   if(moneyTile){
     moneyTile.classList.toggle('hidden', !state.showMoneyToChild);
