@@ -238,7 +238,7 @@
               <div class="k">💰 A receber esta semana</div>
               <div class="v" style="font-size:20px"><span id="childMoneyAmount">R$ 0,00</span></div>
             </div>
-            <div class="progress" aria-label="Progresso de hoje"><div id="bar"></div></div>
+            <div class="progress" aria-label="Progresso da semana"><div id="bar"></div></div>
             <div class="progress-row"><span id="progressText">0 de 0</span><span id="pendingText">0 aguardando</span></div>
             <p style="margin:16px 0 0;color:var(--slate);font-size:14px;line-height:1.5">Ao marcar uma tarefa, ela fica <strong>aguardando</strong> aprovação.</p>
           </div>
@@ -1038,7 +1038,16 @@ function computeSummary(){
   let totalGoalsAll=0;
   instAll.forEach(inst=>{if(inst.status!=='approved') return; const task=tmap.get(inst.taskId); if(!task) return; const rt=task.rewardType||'money'; if(rt==='goal'||rt==='both') totalGoalsAll+=getInstanceStars(inst,task);});
   state.totalGoalStars=totalGoalsAll;
-  return {todayTotal:todayInst.length,todayDoneLike:todayDoneLike.length,pendingCount:todayInst.filter(i=>i.status==='child_marked').length,weekApprovedCount:weekApproved.length,weekApprovedStars,moneyBRL,goalStars,totalGoalStars:totalGoalsAll};
+  // Total esperado de ocorrências na semana, baseado na frequência de cada tarefa
+  let weekTotal=0;
+  tasksForChild(cid).forEach(t=>{
+    if(t.frequency==='daily') weekTotal+=7;
+    else if(t.frequency==='weekly') weekTotal+=1;
+    else if(t.frequency==='custom' && Array.isArray(t.days)) weekTotal+=t.days.length;
+    else weekTotal+=7;
+  });
+  const weekDoneLike=weekInst.filter(i=>i.status==='child_marked'||i.status==='approved').length;
+  return {todayTotal:todayInst.length,todayDoneLike:todayDoneLike.length,pendingCount:todayInst.filter(i=>i.status==='child_marked').length,weekApprovedCount:weekApproved.length,weekApprovedStars,moneyBRL,goalStars,totalGoalStars:totalGoalsAll,weekTotal,weekDoneLike};
 }
 
 
@@ -1301,10 +1310,11 @@ function renderChild(){
     moneyTile.classList.toggle('hidden', !state.showMoneyToChild);
     if(state.showMoneyToChild) $('#childMoneyAmount').textContent=sum.moneyBRL.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   }
-  const total=sum.todayTotal||1;
-  const pct=Math.min(100,Math.round((sum.todayDoneLike/total)*100));
-  $('#progressText').textContent=`${sum.todayDoneLike} de ${total}`;
-  $('#pendingText').textContent=`${sum.pendingCount} aguardando`;
+  const todayTotal=sum.todayTotal||1; // usado apenas para celebração do dia
+  const weekTotal=sum.weekTotal||1;
+  const pct=Math.min(100,Math.round((sum.weekDoneLike/weekTotal)*100));
+  $('#progressText').textContent=`${sum.weekDoneLike} de ${weekTotal} esta semana`;
+  $('#pendingText').textContent=`${sum.pendingCount} aguardando hoje`;
 
   if(_justEnteredChild){
     _justEnteredChild=false;
@@ -1312,9 +1322,9 @@ function renderChild(){
     $('#bar').style.transition='none'; $('#bar').style.width='0%';
     setTimeout(()=>startChildReveal(sum), 1500);
   } else {
-    // Detecta conclusão total do dia (celebração mid-session)
-    const wasDone=_prevDoneCount>=total && total>0;
-    const nowDone=sum.todayDoneLike>=total && total>0;
+    // Celebração ao concluir todas as tarefas DO DIA (não da semana)
+    const wasDone=_prevDoneCount>=todayTotal && todayTotal>0;
+    const nowDone=sum.todayDoneLike>=todayTotal && todayTotal>0;
     if(nowDone && !wasDone && sum.todayDoneLike>0) setTimeout(celebrateComplete,400);
     // Detecta meta atingida (celebração mid-session)
     const cid=activeChildId();
@@ -2264,6 +2274,17 @@ function init(){
       }
     }catch(e){ setCloudStatus('error','Erro no Supabase'); }
   })();
+
+  // Detecta virada de dia enquanto o app está aberto (verifica a cada minuto)
+  let _currentDay=getTodayISO();
+  setInterval(()=>{
+    const today=getTodayISO();
+    if(today!==_currentDay){
+      _currentDay=today;
+      ensureInstancesForToday();
+      renderAll();
+    }
+  }, 60000);
 
   // Auto-sync: fallback polling (Realtime é a via principal)
   document.addEventListener('visibilitychange', async ()=>{
