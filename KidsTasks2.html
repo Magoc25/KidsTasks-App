@@ -227,20 +227,35 @@
           </div>
         </section>
 
-        <aside class="card">
-          <div class="hd"><h2>Semana</h2><div class="meta">Progresso</div></div>
-          <div class="bd">
-            <div class="summary">
-              <div class="tile"><div class="k">Estrelas aprovadas</div><div class="v"><span class="starIcon" aria-hidden="true"></span><span id="stars">0</span></div></div>
-              <div class="tile"><div class="k">Tarefas aprovadas</div><div class="v">✅ <span id="approved">0</span></div></div>
+        <aside style="display:flex;flex-direction:column;gap:16px">
+          <!-- Card Hoje -->
+          <div class="card">
+            <div class="hd"><h2>Hoje</h2><div class="meta" id="todayDateLabel"></div></div>
+            <div class="bd">
+              <div class="summary">
+                <div class="tile"><div class="k">⭐ Aprovadas</div><div class="v"><span class="starIcon" aria-hidden="true"></span><span id="starsToday">0</span></div></div>
+                <div class="tile"><div class="k">✅ Concluídas</div><div class="v">✅ <span id="doneToday">0</span></div></div>
+              </div>
+              <div class="progress" aria-label="Progresso de hoje"><div id="barToday"></div></div>
+              <div class="progress-row"><span id="progressTextToday">0 de 0</span><span id="pendingText">0 aguardando</span></div>
+              <p style="margin:12px 0 0;color:var(--slate);font-size:13px;line-height:1.5">Ao marcar uma tarefa, ela fica <strong>aguardando</strong> aprovação do responsável.</p>
             </div>
-            <div id="childMoneyTile" class="tile hidden" style="margin-top:12px;background:var(--tint-yellow)">
-              <div class="k">💰 A receber esta semana</div>
-              <div class="v" style="font-size:20px"><span id="childMoneyAmount">R$ 0,00</span></div>
+          </div>
+          <!-- Card Semana -->
+          <div class="card">
+            <div class="hd"><h2>Semana</h2><div class="meta">Dom–Sáb</div></div>
+            <div class="bd">
+              <div class="summary">
+                <div class="tile"><div class="k">⭐ Estrelas</div><div class="v"><span class="starIcon" aria-hidden="true"></span><span id="stars">0</span></div></div>
+                <div class="tile"><div class="k">✅ Aprovadas</div><div class="v">✅ <span id="approved">0</span></div></div>
+              </div>
+              <div id="childMoneyTile" class="tile hidden" style="margin-top:12px;background:var(--tint-yellow)">
+                <div class="k">💰 A receber esta semana</div>
+                <div class="v" style="font-size:20px"><span id="childMoneyAmount">R$ 0,00</span></div>
+              </div>
+              <div class="progress" aria-label="Progresso da semana"><div id="bar"></div></div>
+              <div class="progress-row"><span id="progressText">0 de 0 esta semana</span></div>
             </div>
-            <div class="progress" aria-label="Progresso da semana"><div id="bar"></div></div>
-            <div class="progress-row"><span id="progressText">0 de 0</span><span id="pendingText">0 aguardando</span></div>
-            <p style="margin:16px 0 0;color:var(--slate);font-size:14px;line-height:1.5">Ao marcar uma tarefa, ela fica <strong>aguardando</strong> aprovação.</p>
           </div>
         </aside>
       </div>
@@ -747,14 +762,29 @@ function animateTile(elId, target, delay=0){
   },delay);
 }
 function startChildReveal(sum){
-  const total=sum.todayTotal||1;
-  const pct=Math.min(100,Math.round((sum.todayDoneLike/total)*100));
+  const todayPct=Math.min(100,Math.round((sum.todayDoneLike/(sum.todayTotal||1))*100));
+  const weekPct=Math.min(100,Math.round((sum.weekDoneLike/(sum.weekTotal||1))*100));
   if(sum.weekApprovedStars>0) playApprovalChime();
+  // Anima tiles do card Hoje
+  animateTile('#starsToday',sum.todayApprovedStars,0);
+  animateTile('#doneToday',sum.todayDoneLike,250);
+  // Anima tiles do card Semana
   animateTile('#stars',sum.weekApprovedStars,0);
   animateTile('#approved',sum.weekApprovedCount,250);
   setTimeout(()=>{
-    if(pct>0) playProgressSound();
-    animateBar(pct,()=>{ if(pct>=100) setTimeout(celebrateComplete,200); });
+    if(todayPct>0) playProgressSound();
+    // Anima barra do dia
+    const bt=$('#barToday');
+    if(bt){
+      bt.style.transition='none'; bt.style.width='0%';
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        bt.style.transition='width 1.4s cubic-bezier(.16,1,.3,1)';
+        bt.style.width=todayPct+'%';
+        if(todayPct>=100) setTimeout(celebrateComplete,200);
+      }));
+    }
+    // Anima barra da semana
+    animateBar(weekPct,null);
   },350);
 }
 
@@ -1027,6 +1057,8 @@ function computeSummary(){
   const weekInst=instAll.filter(i=>i.date>=week.start && i.date<=week.end);
   const weekApproved=weekInst.filter(i=>i.status==='approved');
   const tmap=new Map(tasksForChild(cid).map(t=>[t.id,t]));
+  const todayApproved=todayInst.filter(i=>i.status==='approved');
+  const todayApprovedStars=todayApproved.reduce((s,inst)=>{const t=tmap.get(inst.taskId);return s+(t?getInstanceStars(inst,t):0);},0);
   const weekApprovedStars=weekApproved.reduce((sum,inst)=>{const task=tmap.get(inst.taskId);return sum+(task?getInstanceStars(inst,task):0);},0);
   const rate=parseFloat(state.pointValueBRL)||0.10;
   let moneyStars=0, goalStars=0;
@@ -1047,7 +1079,7 @@ function computeSummary(){
     else weekTotal+=7;
   });
   const weekDoneLike=weekInst.filter(i=>i.status==='child_marked'||i.status==='approved').length;
-  return {todayTotal:todayInst.length,todayDoneLike:todayDoneLike.length,pendingCount:todayInst.filter(i=>i.status==='child_marked').length,weekApprovedCount:weekApproved.length,weekApprovedStars,moneyBRL,goalStars,totalGoalStars:totalGoalsAll,weekTotal,weekDoneLike};
+  return {todayTotal:todayInst.length,todayDoneLike:todayDoneLike.length,todayApprovedStars,pendingCount:todayInst.filter(i=>i.status==='child_marked').length,weekApprovedCount:weekApproved.length,weekApprovedStars,moneyBRL,goalStars,totalGoalStars:totalGoalsAll,weekTotal,weekDoneLike};
 }
 
 
@@ -1310,31 +1342,43 @@ function renderChild(){
     moneyTile.classList.toggle('hidden', !state.showMoneyToChild);
     if(state.showMoneyToChild) $('#childMoneyAmount').textContent=sum.moneyBRL.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   }
-  const todayTotal=sum.todayTotal||1; // usado apenas para celebração do dia
+  // Card Hoje
+  $('#todayDateLabel').textContent=formatDateBR();
+  const todayTotal=sum.todayTotal||1;
+  const todayPct=Math.min(100,Math.round((sum.todayDoneLike/todayTotal)*100));
+  $('#progressTextToday').textContent=`${sum.todayDoneLike} de ${todayTotal} hoje`;
+  $('#pendingText').textContent=`${sum.pendingCount} aguardando`;
+  // Card Semana
   const weekTotal=sum.weekTotal||1;
-  const pct=Math.min(100,Math.round((sum.weekDoneLike/weekTotal)*100));
+  const weekPct=Math.min(100,Math.round((sum.weekDoneLike/weekTotal)*100));
   $('#progressText').textContent=`${sum.weekDoneLike} de ${weekTotal} esta semana`;
-  $('#pendingText').textContent=`${sum.pendingCount} aguardando hoje`;
 
   if(_justEnteredChild){
     _justEnteredChild=false;
-    $('#stars').textContent='0'; $('#approved').textContent='0';
+    // Zera tudo antes da animação de entrada
+    ['#stars','#approved','#starsToday','#doneToday'].forEach(id=>{const el=$(id);if(el)el.textContent='0';});
+    const bt=$('#barToday'); if(bt){bt.style.transition='none';bt.style.width='0%';}
     $('#bar').style.transition='none'; $('#bar').style.width='0%';
     setTimeout(()=>startChildReveal(sum), 1500);
   } else {
-    // Celebração ao concluir todas as tarefas DO DIA (não da semana)
+    // Celebração ao concluir todas as tarefas DO DIA
     const wasDone=_prevDoneCount>=todayTotal && todayTotal>0;
     const nowDone=sum.todayDoneLike>=todayTotal && todayTotal>0;
     if(nowDone && !wasDone && sum.todayDoneLike>0) setTimeout(celebrateComplete,400);
-    // Detecta meta atingida (celebração mid-session)
+    // Detecta meta atingida
     const cid=activeChildId();
     const newGoalReached=(state.goals||[]).some(g=>g.childId===cid && !g.delivered && sum.totalGoalStars>=g.targetStars && _prevGoalStars<g.targetStars);
     if(newGoalReached) setTimeout(celebrateGoal,600);
     _prevDoneCount=sum.todayDoneLike;
     _prevGoalStars=sum.totalGoalStars||0;
+    // Card Hoje
+    $('#starsToday').textContent=sum.todayApprovedStars;
+    $('#doneToday').textContent=sum.todayDoneLike;
+    $('#barToday').style.width=todayPct+'%';
+    // Card Semana
     $('#stars').textContent=sum.weekApprovedStars;
     $('#approved').textContent=sum.weekApprovedCount;
-    $('#bar').style.width=pct+'%';
+    $('#bar').style.width=weekPct+'%';
   }
 
   const root=$('#tasks'); root.innerHTML='';
