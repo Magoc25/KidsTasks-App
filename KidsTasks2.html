@@ -85,6 +85,8 @@
 }
 /* ── Fim mobile ── */
 
+@keyframes timerPulse{0%,100%{opacity:1}50%{opacity:.25}}
+.timer-pulsing{animation:timerPulse 1s ease-in-out infinite}
 @keyframes tileReveal{from{opacity:0;transform:scale(.85) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
 @keyframes starBurst{0%{transform:scale(.4);opacity:0}65%{transform:scale(1.2)}100%{transform:scale(1);opacity:1}}
 @keyframes taskSlideIn{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:translateX(0)}}
@@ -486,6 +488,37 @@
       </section>
     </section>
   </main>
+
+  <!-- Timer Fullscreen Overlay -->
+  <div id="timerOverlay" style="position:fixed;inset:0;z-index:60;background:linear-gradient(160deg,#0b2a5b 0%,#071f45 100%);display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center">
+    <div id="timerOvIcon" style="font-size:64px;margin-bottom:4px;line-height:1"></div>
+    <div id="timerOvTitle" style="color:#fff;font-size:20px;font-weight:700;margin-bottom:2px;max-width:320px"></div>
+    <div id="timerOvSub" style="color:rgba(255,255,255,0.52);font-size:13px;margin-bottom:28px"></div>
+    <!-- Círculo SVG -->
+    <div style="position:relative;width:min(280px,72vw);height:min(280px,72vw)">
+      <svg viewBox="0 0 220 220" width="100%" height="100%">
+        <defs>
+          <filter id="timerGlow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <circle cx="110" cy="110" r="100" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.09)" stroke-width="16"/>
+        <circle id="timerOvArc" cx="110" cy="110" r="100" fill="none"
+          stroke="#21c36b" stroke-width="16" stroke-linecap="round"
+          stroke-dasharray="628.3" stroke-dashoffset="0"
+          transform="rotate(-90 110 110)"
+          filter="url(#timerGlow)"
+          style="transition:stroke-dashoffset 1s linear,stroke .5s"/>
+      </svg>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+        <div id="timerOvTime" style="color:#fff;font-size:clamp(44px,13vw,68px);font-weight:900;letter-spacing:-2px;line-height:1;font-variant-numeric:tabular-nums">00:00</div>
+        <div id="timerOvLabel" style="color:rgba(255,255,255,0.6);font-size:clamp(12px,3.5vw,15px);margin-top:8px"></div>
+      </div>
+    </div>
+    <!-- Botões -->
+    <div style="margin-top:36px;display:flex;flex-direction:column;gap:12px;width:100%;max-width:300px">
+      <button id="timerOvStop" type="button" style="background:#21c36b;color:#fff;border:none;height:56px;border-radius:28px;font-size:17px;font-weight:700;cursor:pointer">✓ Concluí a tarefa</button>
+      <button id="timerOvClose" type="button" style="background:transparent;border:1px solid rgba(255,255,255,.25);color:rgba(255,255,255,.6);height:42px;border-radius:21px;font-size:14px;cursor:pointer">✕ Fechar tela cheia</button>
+    </div>
+  </div>
 
   <!-- Payment Modal -->
   <div class="overlay" id="paymentOverlay" role="dialog" aria-modal="true">
@@ -1477,9 +1510,9 @@ function renderChild(){
       actionEl=document.createElement('button');
       actionEl.className='btn btn-primary'; actionEl.style.cssText='height:44px;font-size:13px;white-space:nowrap';
       actionEl.textContent='▶ Iniciar';
-      actionEl.addEventListener('click', ()=>startTimer(inst));
+      actionEl.addEventListener('click', async ()=>{ await startTimer(inst); openTimerOverlay(inst,task); });
     } else if(isTimerRunning){
-      // Timer correndo + botão Concluí
+      // Timer correndo + botões Tela cheia e Concluí
       hasRunningTimer=true;
       const wrap=document.createElement('div'); wrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:4px';
       const disp=document.createElement('div'); disp.className='timer-display timer-ontime';
@@ -1487,11 +1520,15 @@ function renderChild(){
       disp.dataset.timerStart=startTs;
       if(task.targetMinutes) disp.dataset.timerTarget=task.targetMinutes;
       disp.textContent=formatElapsed(Math.floor((Date.now()-startTs)/1000));
+      const expandBtn=document.createElement('button');
+      expandBtn.className='btn btn-primary'; expandBtn.style.cssText='height:32px;font-size:12px;white-space:nowrap;background:var(--navy)';
+      expandBtn.textContent='⛶ Tela cheia';
+      expandBtn.addEventListener('click', ()=>openTimerOverlay(inst,task));
       const stopBtn=document.createElement('button');
-      stopBtn.className='btn btn-primary'; stopBtn.style.cssText='height:32px;font-size:12px;white-space:nowrap';
+      stopBtn.className='btn btn-secondary'; stopBtn.style.cssText='height:28px;font-size:11px;white-space:nowrap';
       stopBtn.textContent='✓ Concluí';
       stopBtn.addEventListener('click', ()=>stopTimer(inst,task));
-      wrap.append(disp,stopBtn); actionEl=wrap;
+      wrap.append(disp,expandBtn,stopBtn); actionEl=wrap;
     } else {
       // Checkbox padrão
       actionEl=document.createElement('button'); actionEl.className='check';
@@ -2025,6 +2062,81 @@ async function registerWeeklyPayment(){
 }
 
 
+// ── Cronômetro em tela cheia + Wake Lock ──
+let _timerOvInst=null,_timerOvTask=null,_timerOvTick=null,_wakeLock=null,_timerDone=false;
+
+async function openTimerOverlay(inst,task){
+  _timerOvInst=inst; _timerOvTask=task; _timerDone=false;
+  const ov=$('#timerOverlay'); if(!ov) return;
+  $('#timerOvIcon').textContent=task.icon||'⏱️';
+  $('#timerOvTitle').textContent=task.title;
+  const t=task.targetMinutes;
+  $('#timerOvSub').textContent=t?`Meta: ${t} minuto${t>1?'s':''}`:'Cronômetro livre';
+  const arc=$('#timerOvArc');
+  if(arc){ arc.style.transition='none'; arc.style.strokeDashoffset='0'; arc.style.stroke='#21c36b'; arc.classList.remove('timer-pulsing'); }
+  ov.style.display='flex';
+  updateTimerOverlay();
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{ if(arc) arc.style.transition='stroke-dashoffset 1s linear,stroke .5s'; }));
+  if(_timerOvTick) clearInterval(_timerOvTick);
+  _timerOvTick=setInterval(updateTimerOverlay,1000);
+  requestWakeLock();
+}
+
+function closeTimerOverlay(){
+  const ov=$('#timerOverlay'); if(ov) ov.style.display='none';
+  if(_timerOvTick){ clearInterval(_timerOvTick); _timerOvTick=null; }
+  releaseWakeLock();
+  _timerOvInst=null; _timerOvTask=null; _timerDone=false;
+}
+
+function updateTimerOverlay(){
+  const inst=_timerOvInst,task=_timerOvTask; if(!inst||!task) return;
+  const elapsed=inst.timerStartedAt
+    ?Math.floor((Date.now()-new Date(inst.timerStartedAt).getTime())/1000)
+    :(inst.elapsedSeconds||0);
+  const targetSec=task.targetMinutes?task.targetMinutes*60:0;
+  const circ=628.3;
+  const arc=$('#timerOvArc');
+  if(targetSec>0){
+    const rem=Math.max(0,targetSec-elapsed);
+    const pct=rem/targetSec;
+    $('#timerOvTime').textContent=fmtSec(rem);
+    if(rem<=0){
+      $('#timerOvLabel').textContent='⏰ Tempo encerrado!';
+      if(arc){ arc.style.stroke='#ef4444'; arc.style.strokeDashoffset=String(circ); }
+      if(!_timerDone){ _timerDone=true; if(arc) arc.classList.add('timer-pulsing'); playCompleteSound?.(); }
+    } else {
+      const color=pct>0.5?'#21c36b':pct>0.25?'#ff9d2e':'#ef4444';
+      const lbl=pct>0.5?'Bom ritmo! 💪':pct>0.25?'Quase lá! 🎯':'Últimos instantes! 🏁';
+      $('#timerOvLabel').textContent=lbl;
+      if(arc){ arc.style.stroke=color; arc.style.strokeDashoffset=(circ*(1-pct)).toFixed(1); }
+    }
+  } else {
+    $('#timerOvTime').textContent=fmtSec(elapsed);
+    $('#timerOvLabel').textContent='decorridos';
+    if(arc){ arc.style.stroke='#6e56cf'; arc.style.strokeDashoffset='0'; }
+  }
+}
+
+function fmtSec(s){
+  const abs=Math.abs(s),m=Math.floor(abs/60),sec=abs%60;
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+
+async function requestWakeLock(){
+  if('wakeLock' in navigator){
+    try{ _wakeLock=await navigator.wakeLock.request('screen'); }
+    catch(e){ console.warn('[WakeLock]',e); }
+  }
+}
+function releaseWakeLock(){
+  if(_wakeLock){ _wakeLock.release().catch(()=>{}); _wakeLock=null; }
+}
+// Re-adquire WakeLock se perdido quando app volta ao primeiro plano
+document.addEventListener('visibilitychange',async()=>{
+  if(document.visibilityState==='visible' && _timerOvInst && !_wakeLock) await requestWakeLock();
+});
+
 // ── Chave PIX por criança ──
 function getChildPixKey(cid){ return (state.childPixKeys||{})[cid]||''; }
 function saveChildPixKey(cid,key){ if(!state.childPixKeys) state.childPixKeys={}; state.childPixKeys[cid]=key.trim(); saveState(); }
@@ -2419,6 +2531,13 @@ function bindEvents(){
   // settings
   $('#toggleShowMoney').addEventListener('change', (e)=>{ state.showMoneyToChild=e.target.checked; saveState(); toast('Salvo','ok'); });
   $('#settingPointValueSaveBtn').addEventListener('click', ()=>{ const v=parseFloat($('#settingPointValue').value); if(!v||v<=0) return toast('Digite um valor válido','error'); state.pointValueBRL=v; saveState(); toast('Taxa salva','ok'); renderAll(); });
+  // Timer overlay
+  $('#timerOvStop').addEventListener('click', async()=>{
+    if(_timerOvInst && _timerOvTask) await stopTimer(_timerOvInst, _timerOvTask);
+    closeTimerOverlay();
+  });
+  $('#timerOvClose').addEventListener('click', closeTimerOverlay);
+
   $('#btnForceSync').addEventListener('click', ()=>forceSyncAll());
   $('#btnForceWeekReset').addEventListener('click', ()=>forceWeekReset());
 
