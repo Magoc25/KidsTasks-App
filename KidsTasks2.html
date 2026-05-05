@@ -263,7 +263,7 @@
       </div>
 
       <section class="card hidden" id="childHistoryCard" style="margin-top:16px">
-        <div class="hd"><h2>📅 Minhas semanas</h2><div class="meta">histórico pessoal</div></div>
+        <div class="hd"><h2>📅 Minhas Semanas</h2><div class="meta">histórico pessoal</div></div>
         <div class="bd" id="childHistoryContent"></div>
       </section>
 
@@ -1909,9 +1909,19 @@ async function markHistoryPaid(histId){
 
 function renderHistory(){
   const container=$('#historyContent'); if(!container) return;
-  const history=(state.weekHistory||[]);
+  const archived=(state.weekHistory||[]);
+  const currentWeekStart=getWeekRange().start;
+  // Filhos que já têm entrada no histórico para a semana atual
+  const childrenWithCurrent=new Set(archived.filter(h=>h.weekStart===currentWeekStart).map(h=>h.childId));
+  // Entradas ao vivo para filhos sem entrada na semana atual
+  const liveEntries=(state.childrenList||[])
+    .filter(c=>c.id&&!childrenWithCurrent.has(c.id))
+    .map(c=>buildLiveCurrentWeekEntry(c.id))
+    .filter(e=>e.totalStars>0); // só mostra se tem algo aprovado
+  const history=[...liveEntries,...archived];
+
   updateHistoryBadge();
-  const pending=history.filter(h=>!h.paid).length;
+  const pending=archived.filter(h=>!h.paid).length;
   const meta=$('#histMeta');
   if(meta) meta.textContent=pending>0?`${pending} semana(s) com pagamento pendente`:`Tudo pago ✅`;
 
@@ -1958,17 +1968,25 @@ function renderHistory(){
 function renderChildHistory(){
   const cid=activeChildId();
   const card=$('#childHistoryCard'), container=$('#childHistoryContent'); if(!card||!container) return;
-  const history=(state.weekHistory||[]).filter(h=>h.childId===cid).slice(0,8);
-  if(!history.length){ card.classList.add('hidden'); return; }
+  const currentWeek=getWeekRange();
+  const archived=(state.weekHistory||[]).filter(h=>h.childId===cid);
+  const hasCurrent=archived.some(h=>h.weekStart===currentWeek.start);
+  // Semana atual ao vivo — sempre mostra no topo se não estiver no histórico
+  const liveEntry=buildLiveCurrentWeekEntry(cid);
+  const displayList=hasCurrent ? archived.slice(0,8) : [liveEntry,...archived.slice(0,7)];
+  // Oculta o card só se não há nada (semana atual sem aprovações e sem histórico)
+  if(!archived.length && !liveEntry.totalStars){ card.classList.add('hidden'); return; }
   card.classList.remove('hidden');
   container.innerHTML='';
-  history.forEach(h=>{
+  displayList.forEach(h=>{
     const div=document.createElement('div');
     div.style.cssText='padding:10px 0;border-bottom:1px solid rgba(15,15,15,.06)';
-    const paidMark=h.paid?'<span style="color:var(--success);font-size:13px">✅ Pago</span>':'<span style="color:var(--warning);font-size:13px">⏳ Pendente</span>';
+    const isCurrentWk=h.weekStart===currentWeek.start;
+    const paidMark=h._isLive
+      ?`<span style="color:var(--warning);font-size:12px;font-weight:600">📊 Em andamento</span>`
+      :(h.paid?'<span style="color:var(--success);font-size:13px">✅ Pago</span>':'<span style="color:var(--warning);font-size:13px">⏳ Pendente</span>');
+    const weekLbl=isCurrentWk?'Semana atual':fmtWeekLabel(h.weekStart,h.weekEnd);
     const money=state.showMoneyToChild?`<span style="color:var(--success);font-size:14px"> · ${h.moneyBRL.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</span>`:'';
-    const isCurrent=h.weekStart===getWeekRange().start;
-    const weekLbl=isCurrent?'Semana atual (em andamento)':fmtWeekLabel(h.weekStart,h.weekEnd);
     const goalPart=h.goalStars?` · 🏆 ${h.goalStars} pts meta`:'';
     div.innerHTML=`
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
@@ -1978,6 +1996,29 @@ function renderChildHistory(){
       <div style="margin-top:4px;font-size:15px;font-weight:600">⭐ ${h.totalStars} aprovadas${money}${goalPart}</div>`;
     container.appendChild(div);
   });
+}
+
+// Gera entrada ao vivo da semana atual para um filho (sem depender de weekHistory)
+function buildLiveCurrentWeekEntry(cid){
+  const week=getWeekRange();
+  const child=(state.childrenList||[]).find(c=>c.id===cid)||{name:'Criança'};
+  const tmap=new Map(tasksForChild(cid).map(t=>[t.id,t]));
+  const approved=instancesForChild(cid).filter(i=>i.date>=week.start&&i.date<=week.end&&i.status==='approved');
+  let totalStars=0,moneyStars=0,goalStars=0;
+  const rate=parseFloat(state.pointValueBRL)||0.10;
+  approved.forEach(inst=>{
+    const task=tmap.get(inst.taskId); if(!task) return;
+    const s=getInstanceStars(inst,task); totalStars+=s;
+    const rt=task.rewardType||'money';
+    if(rt==='money'||rt==='both') moneyStars+=s;
+    if(rt==='goal'||rt==='both') goalStars+=s;
+  });
+  return {
+    id:`live_${cid}_${week.start}`, childId:cid, childName:child.name,
+    weekStart:week.start, weekEnd:week.end,
+    totalStars, moneyBRL:moneyStars*rate, goalStars,
+    tasksApproved:approved.length, paid:false, paidAt:null, _isLive:true
+  };
 }
 
 // ── Arquivo de semana anterior (chamado na virada de semana) ──
