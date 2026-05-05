@@ -1916,25 +1916,30 @@ function renderHistory(){
   const container=$('#historyContent'); if(!container) return;
   const archived=(state.weekHistory||[]);
   const currentWeekStart=getWeekRange().start;
-  // Filhos que já têm entrada no histórico para a semana atual
-  const childrenWithCurrent=new Set(archived.filter(h=>h.weekStart===currentWeekStart).map(h=>h.childId));
-  // Entradas ao vivo para filhos sem entrada na semana atual
+  // Semana atual: sempre calcula ao vivo para todos os filhos (ignora dados arquivados do Supabase)
   const liveEntries=(state.childrenList||[])
-    .filter(c=>c.id&&!childrenWithCurrent.has(c.id))
+    .filter(c=>c.id)
     .map(c=>{
-      // Para a criança ativa usa computeSummary (inclui fallback de weekHistory)
+      const archivedCurrent=archived.find(h=>h.childId===c.id&&h.weekStart===currentWeekStart);
+      let entry;
       if(c.id===state.childId){
         const sum=computeSummary();
-        return {id:`live_${c.id}_${currentWeekStart}`,childId:c.id,childName:c.name||'Criança',
+        entry={id:`live_${c.id}_${currentWeekStart}`,childId:c.id,childName:c.name||'Criança',
           weekStart:currentWeekStart,weekEnd:getWeekRange().end,
           totalStars:sum.weekApprovedStars,moneyBRL:sum.moneyBRL,
           goalStars:sum.goalStars,tasksApproved:sum.weekApprovedCount,
-          paid:false,_isLive:true};
+          paid:archivedCurrent?.paid||false,paidAt:archivedCurrent?.paidAt||null,
+          _archivedId:archivedCurrent?.id,_isLive:true};
+      }else{
+        entry=buildLiveCurrentWeekEntry(c.id);
+        if(archivedCurrent){entry.paid=archivedCurrent.paid;entry.paidAt=archivedCurrent.paidAt;entry._archivedId=archivedCurrent.id;}
       }
-      return buildLiveCurrentWeekEntry(c.id);
+      return entry;
     })
     .filter(e=>e.totalStars>0);
-  const history=[...liveEntries,...archived];
+  // Semanas passadas: apenas entradas anteriores à semana atual
+  const pastArchived=archived.filter(h=>h.weekStart<currentWeekStart);
+  const history=[...liveEntries,...pastArchived];
 
   updateHistoryBadge();
   const pending=archived.filter(h=>!h.paid).length;
@@ -1953,12 +1958,17 @@ function renderHistory(){
     const weekLabel=isCurrent
       ?`${fmtWeekLabel(h.weekStart,h.weekEnd)} <span style="color:var(--warning);font-size:12px;font-weight:600">· Em andamento</span>`
       :fmtWeekLabel(h.weekStart,h.weekEnd);
+    const unmarkId=h._archivedId||h.id;
     const paidLabel=h.paid
       ?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <span class="badge ok">✅ Pago em ${new Date(h.paidAt).toLocaleDateString('pt-BR')}</span>
-          <button type="button" onclick="unmarkHistoryPaid('${h.id}')" class="btn btn-secondary" style="height:30px;font-size:12px;padding:0 10px">Desfazer</button>
+          <button type="button" onclick="unmarkHistoryPaid('${unmarkId}')" class="btn btn-secondary" style="height:30px;font-size:12px;padding:0 10px">Desfazer</button>
         </div>`
-      :`<button type="button" onclick="openPaymentModal('${h.id}')" class="btn btn-primary" style="height:36px;font-size:13px">💳 Marcar pago</button>`;
+      :h._isLive&&h.childId===state.childId
+        ?`<button type="button" onclick="openPaymentModal('week')" class="btn btn-primary" style="height:36px;font-size:13px">💳 Marcar pago</button>`
+        :h._isLive
+          ?`<span style="color:var(--warning);font-size:12px;font-weight:600">📊 Em andamento</span>`
+          :`<button type="button" onclick="openPaymentModal('${h.id}')" class="btn btn-primary" style="height:36px;font-size:13px">💳 Marcar pago</button>`;
     // Estrelas monetárias: deriva de moneyBRL e taxa (evita fórmula errada ts-gs com tarefas 'Ambos')
     const _rate=parseFloat(state.pointValueBRL)||0.10;
     const moneyStars=_rate>0?Math.round(h.moneyBRL/_rate):0;
@@ -1984,9 +1994,9 @@ function renderChildHistory(){
   const cid=activeChildId();
   const card=$('#childHistoryCard'), container=$('#childHistoryContent'); if(!card||!container) return;
   const currentWeek=getWeekRange();
-  const archived=(state.weekHistory||[]).filter(h=>h.childId===cid);
-  const hasCurrent=archived.some(h=>h.weekStart===currentWeek.start);
-  // Usa computeSummary() — garante mesmos dados do card "Semana" (inclui fallback de weekHistory)
+  // Semanas passadas: exclui semana atual (será sempre ao vivo)
+  const archived=(state.weekHistory||[]).filter(h=>h.childId===cid&&h.weekStart<currentWeek.start);
+  // Semana atual: sempre ao vivo via computeSummary()
   const sum=computeSummary();
   const active=(state.childrenList||[]).find(c=>c.id===cid)||{};
   const liveEntry={
@@ -1996,7 +2006,7 @@ function renderChildHistory(){
     goalStars:sum.goalStars,tasksApproved:sum.weekApprovedCount,
     paid:false,_isLive:true
   };
-  const displayList=hasCurrent?archived.slice(0,8):[liveEntry,...archived.slice(0,7)];
+  const displayList=(liveEntry.totalStars>0||sum.weekDoneLike)?[liveEntry,...archived.slice(0,7)]:archived.slice(0,8);
   // Oculta só se absolutamente sem dados (sem aprovadas, sem marcadas, sem histórico)
   if(!archived.length&&!liveEntry.totalStars&&!sum.weekDoneLike){card.classList.add('hidden');return;}
   card.classList.remove('hidden');
@@ -2070,8 +2080,9 @@ async function archiveWeek(prevWeekStart, prevWeekEnd, oldInstances){
 
   for(const child of children){
     const cid=child.id; if(!cid) continue;
-    // Evita duplicar se já arquivou esta semana para esta criança
-    if(state.weekHistory.some(h=>h.childId===cid && h.weekStart===prevWeekStart)) continue;
+    // Remove entrada parcial se já existir (garante totais corretos na virada de semana)
+    const staleIdx=(state.weekHistory||[]).findIndex(h=>h.childId===cid&&h.weekStart===prevWeekStart);
+    if(staleIdx>=0) state.weekHistory.splice(staleIdx,1);
 
     const childTasks=tasksForChild(cid);
     const tmap=new Map(childTasks.map(t=>[t.id,t]));
