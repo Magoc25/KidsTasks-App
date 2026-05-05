@@ -1929,7 +1929,6 @@ function renderHistory(){
     container.innerHTML='<p style="color:var(--slate);text-align:center;padding:20px">Nenhuma semana arquivada ainda.<br>O histórico aparece após a primeira virada de semana (domingo) ou ao registrar pagamento.</p>';
     return;
   }
-  const currentWeekStart=getWeekRange().start;
   container.innerHTML='';
   history.forEach(h=>{
     const isCurrent=h.weekStart===currentWeekStart;
