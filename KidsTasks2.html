@@ -1857,7 +1857,7 @@ async function loadWeekHistoryFromSupabase(){
   if(!supabaseClient||!state.familyId) return;
   try{
     const {data,error}=await supabaseClient.from('weekly_payments')
-      .select('family_id,child_id,week_start_date,week_end_date,total_points,goal_stars,paid_at')
+      .select('family_id,child_id,week_start_date,week_end_date,total_points,goal_stars,money_stars,paid_at')
       .eq('family_id',state.familyId)
       .order('week_start_date',{ascending:false}).limit(52);
     if(error||!data) return;
@@ -2108,8 +2108,7 @@ async function archiveWeek(prevWeekStart, prevWeekEnd, oldInstances){
         await supabaseClient.from('weekly_payments').upsert({
           family_id:state.familyId, child_id:cid,
           week_start_date:prevWeekStart, week_end_date:prevWeekEnd,
-          total_points:totalStars, goal_stars:goalStars
-          // paid_at: null (não pago ainda)
+          total_points:totalStars, goal_stars:goalStars, money_stars:moneyStars
         },{onConflict:'family_id,child_id,week_start_date,week_end_date'});
       }catch(e){ console.error('[Archive] weekly_payments',e); }
     }
@@ -2133,7 +2132,7 @@ async function registerWeeklyPayment(){
  const rate=parseFloat(state.pointValueBRL)||0.10;
  const moneyBRL=moneyStars*rate;
  const paidAt=new Date().toISOString();
- const payload={family_id:state.familyId, child_id:state.childId, week_start_date:week.start, week_end_date:week.end, total_points:totalStars, goal_stars:goalStars, paid_at:paidAt};
+ const payload={family_id:state.familyId, child_id:state.childId, week_start_date:week.start, week_end_date:week.end, total_points:totalStars, goal_stars:goalStars, money_stars:moneyStars, paid_at:paidAt};
  const {error}=await supabaseClient.from('weekly_payments').upsert(payload,{onConflict:'family_id,child_id,week_start_date,week_end_date'});
  if(error) throw error;
  state.weekPaid=true;
@@ -2307,10 +2306,12 @@ async function unmarkHistoryPaid(histId){
   if(entry.weekStart===getWeekRange().start) state.weekPaid=false;
   if(supabaseClient&&state.familyId){
     // Upsert com paid_at:null é mais confiável que UPDATE (garante que a linha existe com o valor correto)
+    const _rate=parseFloat(state.pointValueBRL)||0.10;
+    const _mStars=_rate>0?Math.round((entry.moneyBRL||0)/_rate):0;
     const {error}=await supabaseClient.from('weekly_payments').upsert({
       family_id:state.familyId, child_id:entry.childId,
       week_start_date:entry.weekStart, week_end_date:entry.weekEnd,
-      total_points:entry.totalStars||0, goal_stars:entry.goalStars||0,
+      total_points:entry.totalStars||0, goal_stars:entry.goalStars||0, money_stars:_mStars,
       paid_at:null
     },{onConflict:'family_id,child_id,week_start_date,week_end_date'});
     if(error){ toast('Erro ao atualizar Supabase: '+error.message,'error'); return; }
