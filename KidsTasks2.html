@@ -1868,10 +1868,15 @@ async function loadWeekHistoryFromSupabase(){
       const existing=state.weekHistory.find(h=>h.id===histId);
       const child=state.childrenList.find(c=>c.id===row.child_id);
       const gs=row.goal_stars||0, ts=row.total_points||0;
-      // money_stars não está na tabela; usa moneyBRL local se disponível (archiveWeek calcula corretamente)
-      // A fórmula (ts-gs) subestima quando há tarefas tipo "Ambos" (moneyStars==goalStars)
       const ms=row.money_stars!=null?row.money_stars:null;
-      const computedMoney=ms!=null?ms*rate:(existing?.moneyBRL??((ts-gs)*rate));
+      let computedMoney;
+      if(ms!=null){ computedMoney=ms*rate; } // coluna money_stars disponível
+      else if((existing?.moneyBRL||0)>0){ computedMoney=existing.moneyBRL; } // local correto preserva
+      else if(ts>0&&gs===ts){
+        // goal_stars===total_stars: pode ser tarefas 'Ambos' (moneyBRL≠0) ou 'Meta' (moneyBRL=0)
+        const hasBoth=(state.tasks||[]).some(t=>(t.childId===row.child_id||!t.childId)&&t.rewardType==='both');
+        computedMoney=hasBoth?ts*rate:0; // se há tarefa 'Ambos' ativa, assume que dinheiro=todas as estrelas
+      } else { computedMoney=(ts-gs)*rate; }
       const entry={
         id:histId, childId:row.child_id, childName:child?.name||'Criança',
         weekStart:row.week_start_date, weekEnd:row.week_end_date,
@@ -1916,8 +1921,19 @@ function renderHistory(){
   // Entradas ao vivo para filhos sem entrada na semana atual
   const liveEntries=(state.childrenList||[])
     .filter(c=>c.id&&!childrenWithCurrent.has(c.id))
-    .map(c=>buildLiveCurrentWeekEntry(c.id))
-    .filter(e=>e.totalStars>0); // só mostra se tem algo aprovado
+    .map(c=>{
+      // Para a criança ativa usa computeSummary (inclui fallback de weekHistory)
+      if(c.id===state.childId){
+        const sum=computeSummary();
+        return {id:`live_${c.id}_${currentWeekStart}`,childId:c.id,childName:c.name||'Criança',
+          weekStart:currentWeekStart,weekEnd:getWeekRange().end,
+          totalStars:sum.weekApprovedStars,moneyBRL:sum.moneyBRL,
+          goalStars:sum.goalStars,tasksApproved:sum.weekApprovedCount,
+          paid:false,_isLive:true};
+      }
+      return buildLiveCurrentWeekEntry(c.id);
+    })
+    .filter(e=>e.totalStars>0);
   const history=[...liveEntries,...archived];
 
   updateHistoryBadge();
@@ -1970,11 +1986,19 @@ function renderChildHistory(){
   const currentWeek=getWeekRange();
   const archived=(state.weekHistory||[]).filter(h=>h.childId===cid);
   const hasCurrent=archived.some(h=>h.weekStart===currentWeek.start);
-  // Semana atual ao vivo — sempre mostra no topo se não estiver no histórico
-  const liveEntry=buildLiveCurrentWeekEntry(cid);
-  const displayList=hasCurrent ? archived.slice(0,8) : [liveEntry,...archived.slice(0,7)];
-  // Oculta o card só se não há nada (semana atual sem aprovações e sem histórico)
-  if(!archived.length && !liveEntry.totalStars){ card.classList.add('hidden'); return; }
+  // Usa computeSummary() — garante mesmos dados do card "Semana" (inclui fallback de weekHistory)
+  const sum=computeSummary();
+  const active=(state.childrenList||[]).find(c=>c.id===cid)||{};
+  const liveEntry={
+    id:`live_${cid}_${currentWeek.start}`,childId:cid,childName:active.name||'Criança',
+    weekStart:currentWeek.start,weekEnd:currentWeek.end,
+    totalStars:sum.weekApprovedStars,moneyBRL:sum.moneyBRL,
+    goalStars:sum.goalStars,tasksApproved:sum.weekApprovedCount,
+    paid:false,_isLive:true
+  };
+  const displayList=hasCurrent?archived.slice(0,8):[liveEntry,...archived.slice(0,7)];
+  // Oculta só se absolutamente sem dados (sem aprovadas, sem marcadas, sem histórico)
+  if(!archived.length&&!liveEntry.totalStars&&!sum.weekDoneLike){card.classList.add('hidden');return;}
   card.classList.remove('hidden');
   container.innerHTML='';
   displayList.forEach(h=>{
@@ -1995,6 +2019,19 @@ function renderChildHistory(){
       <div style="margin-top:4px;font-size:15px;font-weight:600">⭐ ${h.totalStars} aprovadas${money}${goalPart}</div>`;
     container.appendChild(div);
   });
+}
+
+// Corrige moneyBRL=0 em entradas históricas de tarefas 'Ambos' salvas com fórmula antiga
+function fixHistoryMoneyBRL(){
+  const rate=parseFloat(state.pointValueBRL)||0.10;
+  let changed=false;
+  (state.weekHistory||[]).forEach(h=>{
+    if((h.moneyBRL||0)===0&&h.totalStars>0&&(h.goalStars||0)===h.totalStars){
+      const hasBoth=(state.tasks||[]).some(t=>(t.childId===h.childId||!t.childId)&&t.rewardType==='both');
+      if(hasBoth){ h.moneyBRL=h.totalStars*rate; changed=true; }
+    }
+  });
+  if(changed) saveState();
 }
 
 // Gera entrada ao vivo da semana atual para um filho (sem depender de weekHistory)
@@ -2647,6 +2684,7 @@ function init(){
   populateIconSelect(document.getElementById('fIcon'), TASK_ICON_OPTIONS, '📌');
   populateIconSelect(document.getElementById('editIcon'), TASK_ICON_OPTIONS, '📌');
   populateIconSelect(document.getElementById('newGoalIcon'), GOAL_ICON_OPTIONS, '🎯');
+  fixHistoryMoneyBRL(); // corrige entradas salvas com fórmula errada para 'Ambos'
   showMode('child');
   setParentTab('approvals');
   bindEvents();
