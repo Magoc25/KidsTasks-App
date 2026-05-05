@@ -318,12 +318,13 @@
             <button class="btn btn-primary" id="btnPaid" type="button">Registrar pagamento</button>
             <span class="badge" style="background:var(--surface)">💡 O app só registra — pagamento real é fora do app.</span>
           </div>
-          <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-secondary" id="btnPix" type="button">💖 Apoiar (PIX)</button>
-            <button class="btn btn-secondary" id="btnReviews" type="button">⭐ Avaliações</button>
-          </div>
         </div>
       </section>
+
+      <div id="panelWeekActions" class="hidden" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+        <button class="btn btn-secondary" id="btnPix" type="button">💖 Apoiar (PIX)</button>
+        <button class="btn btn-secondary" id="btnReviews" type="button">⭐ Avaliações</button>
+      </div>
 
       <section class="card hidden" id="panelTasks">
         <div class="hd"><h2>Tarefas cadastradas</h2><div class="meta">cadastre, edite e ajuste</div></div>
@@ -1808,6 +1809,8 @@ function closeCloudModal(){ $('#cloudOverlay').classList.remove('open'); }
 function setParentTab(tab){
   const panels={approvals:$('#panelApprovals'),week:$('#panelWeek'),tasks:$('#panelTasks'),goals:$('#panelGoals'),history:$('#panelHistory'),settings:$('#panelSettings')};
   Object.entries(panels).forEach(([k,el])=>{ if(el) el.classList.toggle('hidden', k!==tab); });
+  const weekActions=$('#panelWeekActions');
+  if(weekActions) weekActions.classList.toggle('hidden', tab!=='week');
   $all('[data-tab]').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
   if(tab==='history') renderHistory();
 }
