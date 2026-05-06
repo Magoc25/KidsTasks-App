@@ -1771,8 +1771,13 @@ function renderParent(){
       saveState(); renderAll();
       // Remove do Supabase se for tarefa com UUID
       if(supabaseClient && isUuidLike(String(t.id))){
-        try{ await supabaseClient.from('tasks').delete().eq('id',t.id); toast('Tarefa removida ✅','ok'); }
-        catch(e){ toast('Removida local; falha no Supabase','error'); }
+        try{
+          const {error,count}=await supabaseClient.from('tasks').delete({count:'exact'}).eq('id',t.id);
+          if(error) throw error;
+          if(count===0) toast('⚠️ Removida local, mas não apagou no Supabase (verifique permissões RLS)','error');
+          else toast('Tarefa removida ✅','ok');
+        }
+        catch(e){ toast('Removida local; falha no Supabase: '+e.message,'error'); }
       } else { toast('Tarefa removida ✅','ok'); }
     });
     tasksBody.appendChild(tr);
