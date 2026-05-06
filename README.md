@@ -44,7 +44,7 @@ Suporta múltiplas crianças por família, cada uma com suas próprias tarefas, 
 
 ### Cenário 1 — Uso local simples _(sem nuvem)_
 
-1. Baixe o arquivo `KidsTasks2.html` para o seu computador
+1. Baixe o arquivo `KidsTasks.html` para o seu computador
 2. Abra no Chrome, Edge ou Safari
 3. Pronto — os dados ficam salvos no próprio navegador
 
@@ -268,7 +268,7 @@ A partir daí, cadastre as tarefas na aba **Tarefas** e use o app normalmente.
 
 1. Na página do repositório recém-criado, clique em **uploading an existing file**
 2. Arraste ou selecione os arquivos do KidsTasks:
-   - `KidsTasks2.html`
+   - `KidsTasks.html`
    - `sw.js`
    - `manifest.json`
    - `icon-192.png`
@@ -294,10 +294,10 @@ A partir daí, cadastre as tarefas na aba **Tarefas** e use o app normalmente.
 
 A URL do app terá o formato:
 ```
-https://seu-usuario.github.io/KidsTasks-App/KidsTasks2.html
+https://seu-usuario.github.io/KidsTasks-App/KidsTasks.html
 ```
 
-> ⚠️ A URL sem o nome do arquivo (`/KidsTasks-App/`) retorna erro 404 — sempre use a URL completa com `KidsTasks2.html` no final.
+> ⚠️ A URL sem o nome do arquivo (`/KidsTasks-App/`) retorna erro 404 — sempre use a URL completa com `KidsTasks.html` no final.
 
 Cole essa URL no navegador de qualquer dispositivo para acessar o app. Para instalar como aplicativo, veja a seção abaixo.
 

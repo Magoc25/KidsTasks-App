@@ -1,6 +1,6 @@
 /* KidsTasks — Service Worker v1.0.0 */
 
-const CACHE_NAME = 'kidstasks-v46';
+const CACHE_NAME = 'kidstasks-v47';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
@@ -22,7 +22,7 @@ self.addEventListener('fetch', event => {
     caches.match(event.request).then(cached => {
       return cached || fetch(event.request).then(response => {
         if (event.request.url.includes('KidsTasks.html') ||
-            event.request.url.includes('KidsTasks2.html') ||
+            event.request.url.includes('KidsTasks.html') ||
             event.request.url.includes('manifest.json') ||
             event.request.url.includes('icon-') ||
             event.request.url.includes('favicon.svg')) {
