@@ -5,7 +5,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
-## [2.0.0] — Maio 2025
+## [2.0.1] — Maio 2026
+
+### 📄 Documentação e licenciamento
+- Inclusão do arquivo `LICENSE.md` com licença própria de uso não comercial.
+- Revisão de `README.md` para remover referências a "open source" permissivo e esclarecer que o projeto possui código-fonte disponível com restrições comerciais.
+- Atualização de `TERMS.md` com cláusulas mais detalhadas de propriedade intelectual, modificações, redistribuição e uso comercial.
+- Alinhamento de todos os documentos ao ano de 2026 e ao registro correto do lançamento inicial em abril de 2026.
+
+---
+
+## [2.0.0] — Maio 2026
 
 ### 🎨 Nova interface
 - Design profissional com tema navy/branco, cards, tipografia e sistema de cores
@@ -38,7 +48,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
-## [1.0.0] — Abril 2025
+## [1.0.0] — Abril 2026
 
 ### 🚀 Lançamento inicial
 
@@ -54,4 +64,4 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
-*© 2025 MGC Dev — Marlon Gomes da Costa · Projeto pessoal e independente*
+*© 2026 MGC Dev — Marlon Gomes da Costa · Projeto pessoal e independente*

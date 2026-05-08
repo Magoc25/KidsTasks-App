@@ -313,7 +313,7 @@ Cole essa URL no navegador de qualquer dispositivo para acessar o app. Para inst
 
 ## ☕ Apoiar o Projeto
 
-O projeto é gratuito e de código aberto. Se foi útil, considere apoiar:
+O projeto é gratuito e possui **código-fonte disponível**. Se foi útil, considere apoiar:
 
 Clique em **☕ Apoiar** no rodapé do app para contribuir via PIX.
 
@@ -335,10 +335,17 @@ Após apoiar, deixe uma avaliação com estrelas e comentário. As avaliações 
 
 ---
 
-## 📄 Licença
+## 📄 Licença e termos de uso
 
-Uso pessoal e educacional livre. Uso comercial requer autorização.
-Consulte [TERMS.md](TERMS.md) para os termos completos.
+Este projeto possui **código-fonte disponível** para estudo, uso pessoal, familiar, educacional, acadêmico e avaliação técnica.
+
+**Não é uma licença open source permissiva tradicional.** O uso comercial, a redistribuição comercial, o white-label, a revenda e a exploração econômica de versões derivadas dependem de autorização prévia e por escrito do autor.
+
+Consulte os arquivos:
+
+- [LICENSE.md](./LICENSE.md)
+- [TERMS.md](./TERMS.md)
+- [CHANGELOG.md](./CHANGELOG.md)
 
 ---
 
@@ -352,4 +359,4 @@ sem vínculo institucional.*
 
 ---
 
-*© 2025 MGC Dev — Feito com ☕ no Maranhão*
+*© 2026 MGC Dev — Feito com ☕ no Maranhão*
