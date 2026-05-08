@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0b2a5b" />
 <!--
   KidsTasks v2
-  © 2025 MGC Dev — Marlon Gomes da Costa
+  © 2026 MGC Dev — Marlon Gomes da Costa
   Projeto pessoal. Proibido uso comercial sem autorização.
   https://github.com/Magoc25/KidsTasks-App
 -->
@@ -2778,7 +2778,7 @@ function init(){
   // Banner de nova versão via Supabase app_config
   (async()=>{
     if(!revClient) return;
-    const LOCAL_VERSION='2.0.0';
+    const LOCAL_VERSION='2.0.1';
     const CACHE_KEY='kidstasks_update_check', CACHE_TTL=24*60*60*1000;
     const cached=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
     if(cached && Date.now()-cached.ts<CACHE_TTL) return;
