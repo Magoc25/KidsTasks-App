@@ -15,6 +15,34 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 
 ---
 
+## 🤔 Por que usar o KidsTasks?
+
+Se você está avaliando este app, provavelmente já viu opções na Play Store ou App Store. Antes de decidir, considere:
+
+- **Seus dados são seus** — nenhuma empresa, servidor externo ou desenvolvedor acessa o histórico de tarefas e recompensas da sua família. Os dados ficam no seu dispositivo ou no seu próprio banco de dados, sob seu controle total.
+- **Sem propagandas** — apps "gratuitos" nas lojas se sustentam exibindo anúncios. O KidsTasks não exibe nenhum.
+- **Sem prazo de expiração** — muitos apps oferecem um período de teste e depois bloqueiam funcionalidades ou cobram assinatura. O KidsTasks é gratuito para sempre, sem limitações.
+- **Funciona sem internet** — abre e funciona normalmente mesmo sem conexão. Sincroniza quando a internet voltar, se você quiser.
+
+O único "custo" honesto: a instalação é um pouco mais manual do que clicar em "Instalar" na loja — mas você faz uma única vez e leva menos de 5 minutos.
+
+---
+
+## 📂 O que são todos esses arquivos?
+
+Se você veio aqui só para **usar o app**, pode ignorar a grande maioria dos arquivos deste repositório — eles são documentação técnica e configuração voltadas para desenvolvedores.
+
+Para você, o que importa é simples:
+
+| Cenário | O que você precisa |
+|---|---|
+| **Usar no computador** (sem nuvem) | Baixar apenas `KidsTasks.html` e abrir no navegador |
+| **Acessar por URL em qualquer dispositivo** | Criar uma conta no GitHub, fazer upload dos arquivos deste repositório uma única vez — depois acessa de qualquer lugar pela URL, sem guardar nada no computador |
+
+👉 Vá direto para [**Como usar**](#-como-usar) para o passo a passo do seu cenário.
+
+---
+
 ## ✨ O que é
 
 O **KidsTasks** é um Progressive Web App (PWA) para famílias que querem organizar as tarefas das crianças e vincular a conclusão delas a recompensas financeiras semanais — de forma simples, segura e sem precisar instalar nada.
