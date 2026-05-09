@@ -12,8 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Consultar dispositivos ativos (últimos 30 dias)
-        id: stats
+      - name: Consultar Supabase e gravar stats.json
         env:
           SB_URL: ${{ secrets.REV_SB_URL }}
           SB_KEY: ${{ secrets.REV_SB_KEY }}
@@ -23,17 +22,10 @@ jobs:
             "${SB_URL}/rest/v1/app_pings?select=device_id&app_name=eq.KidsTasks&ping_date=gte.${THIRTY_DAYS_AGO}" \
             -H "apikey: ${SB_KEY}" \
             -H "Authorization: Bearer ${SB_KEY}")
-          COUNT=$(echo "$RESPONSE" | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-print(len(set(d['device_id'] for d in data)))
-")
-          echo "count=$COUNT" >> $GITHUB_OUTPUT
+          COUNT=$(echo "$RESPONSE" | jq '[.[].device_id] | unique | length')
+          TODAY=$(date +%Y-%m-%d)
+          echo "{\"active_30d\":${COUNT},\"updated_at\":\"${TODAY}\"}" > stats.json
           echo "Dispositivos ativos (30d): $COUNT"
-
-      - name: Gravar stats.json
-        run: |
-          echo "{\"active_30d\":${{ steps.stats.outputs.count }},\"updated_at\":\"$(date +%Y-%m-%d)\"}" > stats.json
 
       - name: Commit e push
         run: |
