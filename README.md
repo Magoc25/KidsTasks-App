@@ -236,9 +236,19 @@ CREATE POLICY "goals_anon"           ON public.goals           FOR ALL TO anon U
 
 ---
 
-**Bloco 6 — Evitar suspensão por inatividade (recomendado):**
+**Bloco 6 — Evitar suspensão por inatividade _(opcional, mas recomendado)_:**
 
-O Supabase pode suspender projetos gratuitos que ficam sem atividade por 7 dias seguidos. Para evitar isso, configure um agendamento automático dentro do próprio banco — ele gera uma consulta leve toda semana, independente de você abrir o app:
+> ⚠️ **Este bloco não é obrigatório para o app funcionar.** O KidsTasks opera normalmente sem ele. Serve apenas para evitar que o Supabase suspenda seu projeto quando você não abrir o app por 7 dias seguidos.
+
+O Supabase pode suspender projetos gratuitos sem atividade por 7 dias. Para evitar isso, configure um agendamento automático dentro do próprio banco — ele gera uma consulta leve toda semana, mesmo que você não abra o app.
+
+**Passo 1 — Ativar a extensão pg_cron:**
+
+No painel do seu projeto Supabase, acesse **Database → Extensions** (menu lateral esquerdo), procure por **`pg_cron`** e ative o toggle.
+
+**Passo 2 — Agendar a consulta semanal:**
+
+Volte ao **SQL Editor**, cole e execute:
 
 ```sql
 SELECT cron.schedule(
@@ -248,9 +258,13 @@ SELECT cron.schedule(
 );
 ```
 
-> Este comando agenda uma consulta toda **segunda-feira às 8h UTC** (5h Brasília).
-> Rode uma única vez no SQL Editor — funciona sozinho a partir daí, sem nenhuma configuração adicional.
-> Para confirmar que foi criado: `SELECT * FROM cron.job;`
+**Passo 3 — Confirmar que foi criado:**
+
+```sql
+SELECT * FROM cron.job;
+```
+
+Deve aparecer uma linha com `jobname = kidstasks-keep-alive`. Pronto — funciona sozinho a partir daí, toda segunda-feira às 5h Brasília, sem nenhuma ação adicional.
 
 ---
 
