@@ -70,6 +70,7 @@ O app **não realiza transações financeiras reais** — o registro de pagament
 - Os dados da família (nomes, tarefas, pontos) ficam armazenados **localmente no navegador** do usuário via `localStorage`.
 - Quando o usuário configura o Supabase opcional, os dados são sincronizados **no projeto Supabase do próprio usuário** — o autor não tem acesso a esses dados.
 - O sistema de avaliações (☕ Apoiar / ⭐ Avaliações) usa um Supabase compartilhado gerenciado pelo autor, contendo apenas: nome do avaliador, comentário, número de estrelas e data. Não são coletados dados bancários.
+- O app envia **um ping anônimo por dia** ao Supabase do autor para contagem de dispositivos ativos. O ping contém apenas: nome do app, versão, data e um identificador aleatório gerado no dispositivo (sem vínculo com dados pessoais, família ou histórico de tarefas). Não é possível identificar o usuário a partir deste dado.
 
 ---
 
