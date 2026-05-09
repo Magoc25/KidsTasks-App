@@ -236,6 +236,24 @@ CREATE POLICY "goals_anon"           ON public.goals           FOR ALL TO anon U
 
 ---
 
+**Bloco 6 — Evitar suspensão por inatividade (recomendado):**
+
+O Supabase pode suspender projetos gratuitos que ficam sem atividade por 7 dias seguidos. Para evitar isso, configure um agendamento automático dentro do próprio banco — ele gera uma consulta leve toda semana, independente de você abrir o app:
+
+```sql
+SELECT cron.schedule(
+  'kidstasks-keep-alive',
+  '0 8 * * 1',
+  $$SELECT COUNT(*) FROM public.families$$
+);
+```
+
+> Este comando agenda uma consulta toda **segunda-feira às 8h UTC** (5h Brasília).
+> Rode uma única vez no SQL Editor — funciona sozinho a partir daí, sem nenhuma configuração adicional.
+> Para confirmar que foi criado: `SELECT * FROM cron.job;`
+
+---
+
 ### Passo 3 — Copiar as chaves
 
 1. No painel do projeto, clique em **Settings → Data API**
