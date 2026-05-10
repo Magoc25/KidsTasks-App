@@ -310,8 +310,9 @@
       </section>
 
       <section class="card hidden" id="panelWeek">
-        <div class="hd"><h2>Resumo da semana</h2><div class="meta">Dom–Sáb</div></div>
+        <div class="hd"><h2>Resumo da semana</h2><div class="meta" id="weekPanelHeader">Dom–Sáb</div></div>
         <div class="bd">
+          <div id="prevWeekPendingBanner" class="hidden"></div>
           <div class="summary">
             <div class="tile"><div class="k">Aprovadas</div><div class="v">✅ <span id="weekApproved">0</span></div></div>
             <div class="tile"><div class="k">Estrelas</div><div class="v"><span class="starIcon" aria-hidden="true"></span><span id="weekPoints">0</span></div></div>
@@ -533,6 +534,7 @@
     <div class="modal">
       <div class="mhd"><h3>💳 Pagamento para <span id="payModalChildName"></span></h3><p id="payModalDesc">Escolha como realizar o pagamento.</p></div>
       <div class="mbd">
+        <div id="payModalWeekLabel" style="text-align:center;font-size:13px;color:var(--slate);margin-bottom:6px"></div>
         <div id="payModalSummary" style="text-align:center;padding:12px;background:var(--surface);border-radius:var(--r-btn);margin-bottom:16px;font-size:16px"></div>
         <div id="payOptions" style="display:flex;flex-direction:column;gap:10px">
           <button id="payByPixBtn" class="btn btn-primary" type="button">📱 Pagar via PIX</button>
@@ -1237,6 +1239,32 @@ async function loadTasksFromSupabase(){
   saveState();
 }
 
+// Recarrega instâncias da semana anterior do Supabase e re-arquiva para garantir completude
+// (necessário quando aprovações foram feitas em outro dispositivo no último dia da semana)
+async function reArchivePrevWeekFromSupabase(){
+  if(!supabaseClient||!state.familyId) return;
+  const week=getWeekRange();
+  const prevEnd=new Date(week.start); prevEnd.setDate(prevEnd.getDate()-1);
+  const prevEndStr=prevEnd.toISOString().slice(0,10);
+  const prevStart=new Date(week.start); prevStart.setDate(prevStart.getDate()-7);
+  const prevStartStr=prevStart.toISOString().slice(0,10);
+  // Busca instâncias da semana anterior para todos os filhos da família
+  const {data,error}=await supabaseClient.from('task_instances')
+    .select('id,family_id,child_id,task_id,date,status,approved_stars,elapsed_seconds,timer_started_at')
+    .eq('family_id',state.familyId)
+    .gte('date',prevStartStr).lte('date',prevEndStr);
+  if(error||!data||!data.length) return;
+  const instances=data.map(r=>({
+    id:r.id,childId:r.child_id,taskId:r.task_id,date:r.date,
+    status:r.status||'pending',
+    approvedStars:typeof r.approved_stars==='number'?r.approved_stars:null,
+    elapsedSeconds:typeof r.elapsed_seconds==='number'?r.elapsed_seconds:null,
+    timerStartedAt:r.timer_started_at||null
+  }));
+  // Re-arquiva com dados completos do Supabase (sobrescreve arquivo local parcial)
+  await archiveWeek(prevStartStr,prevEndStr,instances).catch(e=>console.error('[ReArchive]',e));
+}
+
 async function loadTaskInstancesFromSupabase(){
   if(!supabaseClient || !state.familyId || !state.childId) return;
   const week=getWeekRange();
@@ -1777,10 +1805,22 @@ function renderParent(){
   }
 
   // week
+  const _curWeek=getWeekRange();
+  const _weekHeaderEl=$('#weekPanelHeader');
+  if(_weekHeaderEl) _weekHeaderEl.textContent=`Dom–Sáb · ${fmtWeekLabel(_curWeek.start,_curWeek.end)}`;
   $('#weekApproved').textContent=sum.weekApprovedCount;
   $('#weekPoints').textContent=sum.weekApprovedStars;
   $('#weekMoney').textContent=sum.moneyBRL.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   $('#weekGoalStars').textContent=sum.goalStars;
+  // Aviso de semana anterior não paga
+  const _prevUnpaid=(state.weekHistory||[]).find(h=>h.childId===activeChildId()&&!h.paid&&(h.totalStars||0)>0&&h.weekStart<_curWeek.start);
+  const _prevBanner=$('#prevWeekPendingBanner');
+  if(_prevBanner){
+    if(_prevUnpaid){
+      _prevBanner.innerHTML=`<div style="background:var(--tint-yellow);border-radius:var(--r-card);padding:12px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><strong>⚠️ Semana anterior com pagamento pendente</strong><div style="font-size:13px;color:var(--slate);margin-top:2px">${fmtWeekLabel(_prevUnpaid.weekStart,_prevUnpaid.weekEnd)} · ⭐ ${_prevUnpaid.totalStars} · ${(_prevUnpaid.moneyBRL||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</div></div><button class="btn btn-primary" style="height:36px;font-size:13px" onclick="openPaymentModal('${_prevUnpaid.id}')">💳 Registrar</button></div>`;
+      _prevBanner.classList.remove('hidden');
+    } else { _prevBanner.innerHTML=''; _prevBanner.classList.add('hidden'); }
+  }
 
   // tasks list (com editar)
   const tasksBody=$('#tasksBody'); tasksBody.innerHTML='';
@@ -1869,6 +1909,7 @@ async function forceSyncAll(){
   try{
     await loadChildrenFromSupabase();
     await loadTasksFromSupabase();
+    if(getWeekRange().start===getTodayISO()) await reArchivePrevWeekFromSupabase().catch(()=>{});
     await loadTaskInstancesFromSupabase();
     await loadGoalsFromSupabase();
     await loadWeekHistoryFromSupabase();
@@ -2293,18 +2334,29 @@ function saveChildPixKey(cid,key){ if(!state.childPixKeys) state.childPixKeys={}
 let _payCtx=null, _payPixCode='';
 
 function openPaymentModal(ctx){
-  _payCtx=ctx;
   const cid=activeChildId();
+  // Se ctx='week' mas semana atual tem 0 estrelas, redireciona para semana anterior não paga
+  if(ctx==='week'){
+    const sum=computeSummary();
+    if(sum.weekApprovedStars===0){
+      const unpaid=(state.weekHistory||[]).find(h=>h.childId===cid&&!h.paid&&(h.totalStars||0)>0);
+      if(unpaid) ctx=unpaid.id;
+    }
+  }
+  _payCtx=ctx;
   const child=state.childrenList.find(c=>c.id===cid)||{};
   const pixKey=getChildPixKey(cid);
-  let totalStars=0, moneyBRL=0;
+  let totalStars=0, moneyBRL=0, weekLabel='';
+  const week=getWeekRange();
   if(ctx==='week'){
     const sum=computeSummary(); totalStars=sum.weekApprovedStars; moneyBRL=sum.moneyBRL;
+    weekLabel=`📅 ${fmtWeekLabel(week.start,week.end)} <span style="color:var(--warning);font-size:11px">· Em andamento</span>`;
   } else {
     const h=(state.weekHistory||[]).find(h=>h.id===ctx);
-    if(h){ totalStars=h.totalStars; moneyBRL=h.moneyBRL; }
+    if(h){ totalStars=h.totalStars; moneyBRL=h.moneyBRL; weekLabel=`📅 ${fmtWeekLabel(h.weekStart,h.weekEnd)}`; }
   }
   $('#payModalChildName').textContent=child.name||'Criança';
+  const wl=$('#payModalWeekLabel'); if(wl) wl.innerHTML=weekLabel;
   $('#payModalSummary').innerHTML=`⭐ <strong>${totalStars}</strong> estrelas · <strong>${moneyBRL.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</strong>`;
   const pixBtn=$('#payByPixBtn');
   if(pixKey){ pixBtn.disabled=false; pixBtn.title=''; pixBtn.textContent='📱 Pagar via PIX'; }
@@ -2766,6 +2818,8 @@ function init(){
       if(state.familyId){
         await loadChildrenFromSupabase().catch(()=>{});
         await loadTasksFromSupabase().catch(()=>{});
+        // Na virada de semana (domingo), recarrega semana anterior para garantir arquivo completo
+        if(getWeekRange().start===getTodayISO()) await reArchivePrevWeekFromSupabase().catch(()=>{});
         await loadTaskInstancesFromSupabase().catch(()=>{});
         await loadGoalsFromSupabase().catch(()=>{});
         await loadWeekHistoryFromSupabase().catch(()=>{});
