@@ -154,6 +154,14 @@
 .table th,.table td{padding:12px 14px;border-bottom:1px solid rgba(15,15,15,.06);text-align:left;font-size:14px}
 .table th{background:var(--surface);font-weight:600;color:var(--slate)}
 .table tr:last-child td{border-bottom:none}
+/* Drag & drop tarefas */
+.drag-handle{cursor:grab;font-size:18px;color:var(--slate);padding:4px 8px;user-select:none;touch-action:none;display:inline-block;line-height:1}
+.drag-handle:active{cursor:grabbing}
+#tasksBody tr{transition:opacity .15s,box-shadow .1s}
+#tasksBody tr.dnd-src{opacity:.3}
+#tasksBody tr.dnd-over-top{box-shadow:0 -3px 0 #6366f1}
+#tasksBody tr.dnd-over-bot{box-shadow:0 3px 0 #6366f1}
+.dnd-ghost{position:fixed;pointer-events:none;padding:10px 16px;background:#0f172a;color:#fff;border-radius:8px;font-size:14px;font-weight:600;z-index:9999;transform:rotate(1.5deg);box-shadow:0 8px 24px rgba(0,0,0,.35);white-space:nowrap;transition:none}
 .kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 @media(max-width:900px){.kpi{grid-template-columns:1fr}}
 .kpi .kcard{padding:16px;border-radius:var(--r-card);border:1px solid rgba(15,15,15,.10);background:#fff;box-shadow:var(--sh-1)}
@@ -384,7 +392,7 @@
               </div>
             </div>
           </form>
-          <div class="table-wrap"><table class="table"><thead><tr><th>Ícone</th><th>Tarefa</th><th>⭐</th><th>Dias</th><th>Tipo</th><th>Ações</th></tr></thead><tbody id="tasksBody"></tbody></table></div>
+          <div class="table-wrap"><table class="table"><thead><tr><th style="width:36px"></th><th>Ícone</th><th>Tarefa</th><th>⭐</th><th>Dias</th><th>Tipo</th><th>Ações</th></tr></thead><tbody id="tasksBody"></tbody></table></div>
         </div>
       </section>
 
@@ -996,6 +1004,7 @@ const defaultState={
   lastWeekStart:'',
   weekHistory:[],
   goalsHistory:[],
+  taskOrder:[],
   childPixKeys:{},
   totalGoalStars:0,
   goals:[],
@@ -1236,6 +1245,15 @@ async function loadTasksFromSupabase(){
   // Remove somente tarefas do supabase (uuid) da criança ativa e substitui
   state.tasks = (state.tasks||[]).filter(t => !(t.childId===state.childId && isUuidLike(String(t.id))));
   state.tasks.push(...mapped);
+  // Reaplica a ordem salva pelo drag & drop (taskOrder) após carga do Supabase
+  if((state.taskOrder||[]).length){
+    const om=new Map(state.taskOrder.map((id,i)=>[id,i]));
+    state.tasks.sort((a,b)=>{
+      const ai=om.has(String(a.id))?om.get(String(a.id)):Infinity;
+      const bi=om.has(String(b.id))?om.get(String(b.id)):Infinity;
+      return ai-bi;
+    });
+  }
   saveState();
 }
 
@@ -1826,7 +1844,9 @@ function renderParent(){
   const tasksBody=$('#tasksBody'); tasksBody.innerHTML='';
   tasksForChild(activeChildId()).forEach(t=>{
     const tr=document.createElement('tr');
+    tr.dataset.taskId=String(t.id);
     tr.innerHTML=`
+      <td style="padding:8px 4px"><span class="drag-handle" title="Arrastar para reordenar">⠿</span></td>
       <td>${esc(t.icon||'✅')}</td>
       <td>${esc(t.title)}</td>
       <td>${Math.max(1,Math.min(5,parseInt(t.points,10)||1))}</td>
@@ -2451,7 +2471,7 @@ async function importBackup(file){
     const text=await file.text();
     const data=JSON.parse(text);
     if(!data||typeof data!=='object') throw new Error('Arquivo inválido');
-    const fields=['tasks','instances','goals','weekHistory','goalsHistory','familyId','familyName','childId','childrenList','pointValueBRL','showMoneyToChild','parentPin','parentPinEnabled','lastWeekStart','totalGoalStars'];
+    const fields=['tasks','instances','goals','weekHistory','goalsHistory','taskOrder','familyId','familyName','childId','childrenList','pointValueBRL','showMoneyToChild','parentPin','parentPinEnabled','lastWeekStart','totalGoalStars'];
     fields.forEach(k=>{ if(data[k]!==undefined) state[k]=data[k]; });
     saveState(); ensureInstancesForToday(); renderAll();
     toast('Backup importado ✅','ok');
@@ -2548,7 +2568,87 @@ async function submitReview(){
   $('#reviewThankYouMsg').textContent = result.ok ? '✅ Avaliação sincronizada!' : `⚠️ Salvo só neste dispositivo. Motivo: ${result.reason||'desconhecido'}`;
 }
 
-function renderAll(){ ensureInstancesForToday(); renderChild(); renderParent(); }
+// ── Drag & drop para reordenar tarefas (painel do responsável) ──
+function initTaskDragDrop(){
+  const tbody=$('#tasksBody');
+  if(!tbody || tbody._dndBound) return;
+  tbody._dndBound=true;
+
+  let dragId=null, ghost=null, overRow=null;
+
+  function clearState(){
+    dragId=null;
+    if(ghost){ ghost.remove(); ghost=null; }
+    tbody.querySelectorAll('tr').forEach(r=>r.classList.remove('dnd-src','dnd-over-top','dnd-over-bot'));
+    overRow=null;
+    document.removeEventListener('pointermove',onMove,true);
+    document.removeEventListener('pointerup',onUp,true);
+    document.removeEventListener('pointercancel',onUp,true);
+  }
+
+  function onMove(e){
+    if(!ghost||!dragId) return;
+    ghost.style.left=(e.clientX+14)+'px';
+    ghost.style.top=(e.clientY-24)+'px';
+
+    ghost.style.visibility='hidden';
+    const el=document.elementFromPoint(e.clientX,e.clientY);
+    ghost.style.visibility='';
+    const row=el && el.closest('#tasksBody tr[data-task-id]');
+
+    if(overRow && overRow!==row) overRow.classList.remove('dnd-over-top','dnd-over-bot');
+    if(row && row.dataset.taskId!==dragId){
+      overRow=row;
+      const mid=row.getBoundingClientRect().top+row.getBoundingClientRect().height/2;
+      row.classList.remove('dnd-over-top','dnd-over-bot');
+      row.classList.add(e.clientY<mid?'dnd-over-top':'dnd-over-bot');
+    } else if(!row || row.dataset.taskId===dragId){ overRow=null; }
+  }
+
+  function onUp(e){
+    if(!dragId){ clearState(); return; }
+    if(overRow){
+      const targetId=overRow.dataset.taskId;
+      const insertBefore=overRow.classList.contains('dnd-over-top');
+      const tasks=state.tasks;
+      const fromIdx=tasks.findIndex(t=>String(t.id)===dragId);
+      const toIdx=tasks.findIndex(t=>String(t.id)===targetId);
+      if(fromIdx>=0 && toIdx>=0 && fromIdx!==toIdx){
+        const [moved]=tasks.splice(fromIdx,1);
+        const newToIdx=tasks.findIndex(t=>String(t.id)===targetId);
+        tasks.splice(insertBefore?newToIdx:newToIdx+1,0,moved);
+        state.taskOrder=tasks.map(t=>String(t.id));
+        saveState();
+        renderAll();
+      }
+    }
+    clearState();
+  }
+
+  tbody.addEventListener('pointerdown',e=>{
+    const handle=e.target.closest('.drag-handle');
+    if(!handle) return;
+    const row=handle.closest('tr[data-task-id]');
+    if(!row) return;
+    e.preventDefault();
+    dragId=row.dataset.taskId;
+    row.classList.add('dnd-src');
+
+    const task=(state.tasks||[]).find(t=>String(t.id)===dragId);
+    ghost=document.createElement('div');
+    ghost.className='dnd-ghost';
+    ghost.textContent=`${task?.icon||'✅'} ${task?.title||'Tarefa'}`;
+    ghost.style.left=(e.clientX+14)+'px';
+    ghost.style.top=(e.clientY-24)+'px';
+    document.body.appendChild(ghost);
+
+    document.addEventListener('pointermove',onMove,true);
+    document.addEventListener('pointerup',onUp,true);
+    document.addEventListener('pointercancel',onUp,true);
+  });
+}
+
+function renderAll(){ ensureInstancesForToday(); renderChild(); renderParent(); initTaskDragDrop(); }
 
 function bindEvents(){
   // top
