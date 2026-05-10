@@ -2468,10 +2468,15 @@ const REV_SB_KEY='sb_publishable_0Saq2ZYXgGEApcbvWAahtw_VQ9b9iTq';
 let revClient=null;
 function initRevClient(){ try{ if(window.supabase && typeof window.supabase.createClient==='function') revClient=window.supabase.createClient(REV_SB_URL, REV_SB_KEY); }catch(e){ console.error('[Reviews] init', e);} }
 function pixEmv(key,name,city,amount){
+  // BR Code PIX exige campos 59 e 60 sem acentos nem caracteres especiais
+  const normPix=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
   const f=(id,val)=>{const v=String(val);return id+String(v.length).padStart(2,'0')+v;};
-  const mai=f('26',f('00','BR.GOV.BCB.PIX')+f('01',key));
+  const safeKey=key.trim();
+  const safeName=normPix(name).slice(0,25)||'Beneficiario';
+  const safeCity=normPix(city).slice(0,15)||'Brasil';
+  const mai=f('26',f('00','BR.GOV.BCB.PIX')+f('01',safeKey));
   const adf=f('62',f('05','***'));
-  let emv=f('00','01')+mai+f('52','0000')+f('53','986')+(amount && parseFloat(amount)>0?f('54',parseFloat(amount).toFixed(2)):'')+f('58','BR')+f('59',name.slice(0,25))+f('60',city.slice(0,15))+adf+'6304';
+  let emv=f('00','01')+mai+f('52','0000')+f('53','986')+(amount && parseFloat(amount)>0?f('54',parseFloat(amount).toFixed(2)):'')+f('58','BR')+f('59',safeName)+f('60',safeCity)+adf+'6304';
   let crc=0xFFFF;
   for(let i=0;i<emv.length;i++){ crc^=emv.charCodeAt(i)<<8; for(let j=0;j<8;j++){ crc=(crc & 0x8000)?((crc<<1)^0x1021):(crc<<1); crc &=0xFFFF; } }
   return emv+crc.toString(16).toUpperCase().padStart(4,'0');
