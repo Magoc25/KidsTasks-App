@@ -2406,9 +2406,11 @@ async function _markHistoryPaidDirect(histId){
   const entry=(state.weekHistory||[]).find(h=>h.id===histId); if(!entry) return;
   entry.paid=true; entry.paidAt=new Date().toISOString(); saveState();
   if(supabaseClient&&state.familyId){
-    await supabaseClient.from('weekly_payments').update({paid_at:entry.paidAt})
-      .eq('family_id',state.familyId).eq('child_id',entry.childId)
-      .eq('week_start_date',entry.weekStart).catch(e=>console.error('[History] markPaid',e));
+    try{
+      await supabaseClient.from('weekly_payments').update({paid_at:entry.paidAt})
+        .eq('family_id',state.familyId).eq('child_id',entry.childId)
+        .eq('week_start_date',entry.weekStart);
+    }catch(e){ console.error('[History] markPaid',e); }
   }
   updateHistoryBadge();
 }
