@@ -407,6 +407,7 @@
             </div>
           </div>
           <div id="goalsList"></div>
+          <div id="goalsHistorySection"></div>
         </div>
       </section>
 
@@ -992,6 +993,7 @@ const defaultState={
   weekPaid:false,
   lastWeekStart:'',
   weekHistory:[],
+  goalsHistory:[],
   childPixKeys:{},
   totalGoalStars:0,
   goals:[],
@@ -1141,7 +1143,9 @@ function computeSummary(){
   const moneyBRL=moneyStars*rate;
   let totalGoalsAll=0;
   instAll.forEach(inst=>{if(inst.status!=='approved') return; const task=tmap.get(inst.taskId); if(!task) return; const rt=task.rewardType||'money'; if(rt==='goal'||rt==='both') totalGoalsAll+=getInstanceStars(inst,task);});
-  state.totalGoalStars=totalGoalsAll;
+  // Acumula estrelas de meta das semanas arquivadas anteriores à semana atual
+  const histGoalStars=(state.weekHistory||[]).filter(h=>h.childId===cid&&h.weekStart<week.start).reduce((s,h)=>s+(h.goalStars||0),0);
+  state.totalGoalStars=totalGoalsAll+histGoalStars;
   // Total esperado de ocorrências na semana, baseado na frequência de cada tarefa
   let weekTotal=0;
   tasksForChild(cid).forEach(t=>{
@@ -1151,7 +1155,7 @@ function computeSummary(){
     else weekTotal+=7;
   });
   const weekDoneLike=weekInst.filter(i=>i.status==='child_marked'||i.status==='approved').length;
-  return {todayTotal:todayInst.length,todayDoneLike:todayDoneLike.length,todayApprovedStars,pendingCount:todayInst.filter(i=>i.status==='child_marked').length,weekApprovedCount:weekApproved.length,weekApprovedStars,moneyBRL,goalStars,totalGoalStars:totalGoalsAll,weekTotal,weekDoneLike};
+  return {todayTotal:todayInst.length,todayDoneLike:todayDoneLike.length,todayApprovedStars,pendingCount:todayInst.filter(i=>i.status==='child_marked').length,weekApprovedCount:weekApproved.length,weekApprovedStars,moneyBRL,goalStars,totalGoalStars:state.totalGoalStars,weekTotal,weekDoneLike};
 }
 
 
@@ -1577,7 +1581,8 @@ function renderChildGoals(){
   const list=$('#childGoalsList');
   const starsEl=$('#childGoalStarsTotal');
   if(!card||!list) return;
-  if(!goals.length){ card.classList.add('hidden'); return; }
+  const delivered=(state.goalsHistory||[]).filter(h=>h.childId===cid);
+  if(!goals.length&&!delivered.length){ card.classList.add('hidden'); return; }
   card.classList.remove('hidden');
   if(starsEl) starsEl.textContent=total;
   list.innerHTML='';
@@ -1609,6 +1614,19 @@ function renderChildGoals(){
       ${statusHtml}`;
     list.appendChild(div);
   });
+  // Conquistas (metas entregues)
+  if(delivered.length){
+    const sec=document.createElement('div');
+    sec.style.cssText='margin-top:16px';
+    sec.innerHTML='<div style="font-size:13px;font-weight:700;color:var(--slate);margin-bottom:8px">🎖️ Conquistas</div>';
+    delivered.forEach(h=>{
+      const d=document.createElement('div');
+      d.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(15,15,15,.06);gap:8px;flex-wrap:wrap';
+      d.innerHTML=`<span style="font-size:15px">${esc(h.icon)} ${esc(h.title)}</span><span style="font-size:12px;color:#21c36b;font-weight:600">✅ ${new Date(h.deliveredAt).toLocaleDateString('pt-BR')}</span>`;
+      sec.appendChild(d);
+    });
+    list.appendChild(sec);
+  }
 }
 
 function renderGoalsList(){
@@ -1649,6 +1667,9 @@ function renderGoalsList(){
         if(!confirm('Marcar como entregue?')) return;
         goal.delivered=true;
         goal.deliveredAt=new Date().toISOString();
+        const _child=(state.childrenList||[]).find(c=>c.id===goal.childId)||{name:'Criança'};
+        state.goalsHistory||=[];
+        state.goalsHistory.unshift({id:`gh_${goal.id}_${Date.now()}`,goalId:String(goal.id),childId:goal.childId,childName:_child.name,title:goal.title,icon:goal.icon||'🏆',targetStars:goal.targetStars,deliveredAt:goal.deliveredAt});
         saveState();
         renderAll();
       });
@@ -1666,6 +1687,21 @@ function renderGoalsList(){
 
     list.appendChild(div);
   });
+
+  // Histórico de metas concluídas
+  const cid2=activeChildId();
+  const delivered=(state.goalsHistory||[]).filter(h=>h.childId===cid2);
+  const histSec=$('#goalsHistorySection');
+  if(histSec){
+    if(!delivered.length){ histSec.innerHTML=''; return; }
+    histSec.innerHTML=`<h3 style="font-size:15px;font-weight:700;margin:20px 0 10px;color:var(--slate)">🎖️ Metas concluídas</h3>`;
+    delivered.forEach(h=>{
+      const d=document.createElement('div');
+      d.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(15,15,15,.06);gap:12px;flex-wrap:wrap';
+      d.innerHTML=`<div><strong style="font-size:15px">${esc(h.icon)} ${esc(h.title)}</strong><div style="font-size:13px;color:var(--slate)">Meta: ${h.targetStars} ⭐ · Entregue em ${new Date(h.deliveredAt).toLocaleDateString('pt-BR')}</div></div><span style="font-size:13px;color:#21c36b;font-weight:600">✅ ${esc(h.childName)}</span>`;
+      histSec.appendChild(d);
+    });
+  }
 }
 
 function renderChildrenList(){
@@ -1884,8 +1920,9 @@ async function loadWeekHistoryFromSupabase(){
       const gs=row.goal_stars||0, ts=row.total_points||0;
       const ms=row.money_stars!=null?row.money_stars:null;
       let computedMoney;
-      if(ms!=null){ computedMoney=ms*rate; } // coluna money_stars disponível
-      else if((existing?.moneyBRL||0)>0){ computedMoney=existing.moneyBRL; } // local correto preserva
+      if(ms!=null&&ms>0){ computedMoney=ms*rate; } // BD tem valor positivo: confiável
+      else if((existing?.moneyBRL||0)>0){ computedMoney=existing.moneyBRL; } // preserva local (evita sobrescrever com DEFAULT 0 do BD)
+      else if(ms===0){ computedMoney=0; } // BD diz zero e não há local positivo — aceita
       else if(ts>0&&gs===ts){
         // goal_stars===total_stars: pode ser tarefas 'Ambos' (moneyBRL≠0) ou 'Meta' (moneyBRL=0)
         const hasBoth=(state.tasks||[]).some(t=>(t.childId===row.child_id||!t.childId)&&t.rewardType==='both');
@@ -2360,7 +2397,7 @@ async function importBackup(file){
     const text=await file.text();
     const data=JSON.parse(text);
     if(!data||typeof data!=='object') throw new Error('Arquivo inválido');
-    const fields=['tasks','instances','goals','weekHistory','familyId','familyName','childId','childrenList','pointValueBRL','showMoneyToChild','parentPin','parentPinEnabled','lastWeekStart','totalGoalStars'];
+    const fields=['tasks','instances','goals','weekHistory','goalsHistory','familyId','familyName','childId','childrenList','pointValueBRL','showMoneyToChild','parentPin','parentPinEnabled','lastWeekStart','totalGoalStars'];
     fields.forEach(k=>{ if(data[k]!==undefined) state[k]=data[k]; });
     saveState(); ensureInstancesForToday(); renderAll();
     toast('Backup importado ✅','ok');
@@ -2587,7 +2624,12 @@ function bindEvents(){
     goal.targetStars=Math.max(1,parseInt($('#editGoalTarget').value,10)||1);
     const wasDelivered=goal.delivered;
     goal.delivered=$('#editGoalDelivered').checked;
-    if(goal.delivered && !wasDelivered) goal.deliveredAt=new Date().toISOString();
+    if(goal.delivered && !wasDelivered){
+      goal.deliveredAt=new Date().toISOString();
+      const _child=(state.childrenList||[]).find(c=>c.id===goal.childId)||{name:'Criança'};
+      state.goalsHistory||=[];
+      state.goalsHistory.unshift({id:`gh_${goal.id}_${Date.now()}`,goalId:String(goal.id),childId:goal.childId,childName:_child.name,title:goal.title,icon:goal.icon||'🏆',targetStars:goal.targetStars,deliveredAt:goal.deliveredAt});
+    }
     if(!goal.delivered) goal.deliveredAt=null;
     saveState();
     if(supabaseClient && state.familyId && state.childId){
