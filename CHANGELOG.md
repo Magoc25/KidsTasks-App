@@ -5,6 +5,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [2.1.1] — Maio 2026
+
+### 🐛 Correções
+
+- **Painel da criança — metas entregues** continuavam aparecendo na lista ativa com barra cheia e "Meta atingida! Fale com o responsável." após serem marcadas como entregues. Agora metas com `delivered=true` são ignoradas na lista ativa e aparecem apenas em "🎖️ Conquistas".
+- **Duplo clique em "Marcar entregue"** gerava entradas duplicadas em "🎖️ Metas concluídas" e "🎖️ Conquistas". Adicionado guard `if(goal.delivered) return` no início do handler.
+- **Sem botão para remover entrada do histórico de metas** — adicionado botão ✕ em cada entrada de "🎖️ Metas concluídas" no painel do responsável para remoção de duplicatas ou entradas indesejadas.
+
+---
+
 ## [2.1.0] — Maio 2026
 
 ### 🆕 Funcionalidades novas

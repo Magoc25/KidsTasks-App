@@ -1634,20 +1634,17 @@ function renderChildGoals(){
   if(starsEl) starsEl.textContent=total;
   list.innerHTML='';
   goals.forEach(goal=>{
+    if(goal.delivered) return; // já está em goalsHistory — não mostrar na lista ativa
     const target=Math.max(1,parseInt(goal.targetStars,10)||1);
     const pct=Math.min(100,Math.round((total/target)*100));
     const reached=total>=target;
     const div=document.createElement('div');
     div.style.cssText='padding:12px 0;border-bottom:1px solid rgba(15,15,15,.06)';
-    const barColor=goal.delivered
-      ?'background:linear-gradient(90deg,#6b7280,#9ca3af)'
-      :reached
-        ?'background:linear-gradient(90deg,#21c36b,#7ae7b0)'
-        :'background:linear-gradient(90deg,#ff9d2e,#facc15)';
+    const barColor=reached
+      ?'background:linear-gradient(90deg,#21c36b,#7ae7b0)'
+      :'background:linear-gradient(90deg,#ff9d2e,#facc15)';
     let statusHtml='';
-    if(goal.delivered){
-      statusHtml='<span style="font-size:14px;color:#21c36b;font-weight:600">✅ Recompensa entregue!</span>';
-    } else if(reached){
+    if(reached){
       statusHtml='<span style="font-size:14px;color:#21c36b;font-weight:600">🎉 Meta atingida! Fale com o responsável.</span>';
     } else {
       statusHtml=`<span style="font-size:14px;color:var(--slate)">Faltam ${Math.max(0,target-total)} ⭐</span>`;
@@ -1711,6 +1708,7 @@ function renderGoalsList(){
     const deliverBtn = div.querySelector('[data-act=deliver]');
     if(deliverBtn){
       deliverBtn.addEventListener('click', ()=>{
+        if(goal.delivered) return; // guard contra duplo clique
         if(!confirm('Marcar como entregue?')) return;
         goal.delivered=true;
         goal.deliveredAt=new Date().toISOString();
@@ -1745,7 +1743,12 @@ function renderGoalsList(){
     delivered.forEach(h=>{
       const d=document.createElement('div');
       d.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(15,15,15,.06);gap:12px;flex-wrap:wrap';
-      d.innerHTML=`<div><strong style="font-size:15px">${esc(h.icon)} ${esc(h.title)}</strong><div style="font-size:13px;color:var(--slate)">Meta: ${h.targetStars} ⭐ · Entregue em ${new Date(h.deliveredAt).toLocaleDateString('pt-BR')}</div></div><span style="font-size:13px;color:#21c36b;font-weight:600">✅ ${esc(h.childName)}</span>`;
+      d.innerHTML=`<div><strong style="font-size:15px">${esc(h.icon)} ${esc(h.title)}</strong><div style="font-size:13px;color:var(--slate)">Meta: ${h.targetStars} ⭐ · Entregue em ${new Date(h.deliveredAt).toLocaleDateString('pt-BR')}</div></div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:13px;color:#21c36b;font-weight:600">✅ ${esc(h.childName)}</span><button data-hid="${esc(h.id)}" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:16px;padding:2px 4px;line-height:1" title="Remover do histórico">✕</button></div>`;
+      d.querySelector('button').addEventListener('click', ()=>{
+        if(!confirm('Remover esta conquista do histórico?')) return;
+        state.goalsHistory=(state.goalsHistory||[]).filter(x=>x.id!==h.id);
+        saveState(); renderAll();
+      });
       histSec.appendChild(d);
     });
   }
@@ -2982,7 +2985,7 @@ function init(){
   // Banner de nova versão via Supabase app_config
   (async()=>{
     if(!revClient) return;
-    const LOCAL_VERSION='2.1.0';
+    const LOCAL_VERSION='2.1.1';
     const CACHE_KEY='kidstasks_update_check', CACHE_TTL=24*60*60*1000;
     const cached=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
     if(cached && Date.now()-cached.ts<CACHE_TTL) return;
@@ -3016,7 +3019,7 @@ function init(){
     if(!deviceId){ deviceId=crypto.randomUUID(); localStorage.setItem('kidstasks_device_id',deviceId); }
     try{
       await revClient.from('app_pings').upsert(
-        {app_name:'KidsTasks',version:'2.1.0',device_id:deviceId,ping_date:today},
+        {app_name:'KidsTasks',version:'2.1.1',device_id:deviceId,ping_date:today},
         {onConflict:'app_name,device_id,ping_date',ignoreDuplicates:true}
       );
       localStorage.setItem(PING_KEY,today);
