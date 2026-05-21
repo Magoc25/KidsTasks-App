@@ -2232,13 +2232,22 @@ async function archiveWeek(prevWeekStart, prevWeekEnd, oldInstances){
     state.weekHistory.unshift(entry); // mais recente primeiro
 
     // Salva no Supabase weekly_payments
+    // Proteção: só sobrescreve se os dados locais forem iguais ou mais completos que o Supabase.
+    // Evita que um dispositivo com instâncias parciais/desatualizadas apague dados corretos.
     if(supabaseClient && state.familyId){
       try{
-        await supabaseClient.from('weekly_payments').upsert({
-          family_id:state.familyId, child_id:cid,
-          week_start_date:prevWeekStart, week_end_date:prevWeekEnd,
-          total_points:totalStars, goal_stars:goalStars, money_stars:moneyStars
-        },{onConflict:'family_id,child_id,week_start_date,week_end_date'});
+        const {data:sbRow}=await supabaseClient.from('weekly_payments')
+          .select('total_points').eq('family_id',state.familyId).eq('child_id',cid)
+          .eq('week_start_date',prevWeekStart).maybeSingle();
+        if(sbRow && sbRow.total_points > totalStars){
+          console.warn('[Archive] Supabase já tem dados mais completos (%d > %d) — upsert ignorado para child %s',sbRow.total_points,totalStars,cid);
+        } else {
+          await supabaseClient.from('weekly_payments').upsert({
+            family_id:state.familyId, child_id:cid,
+            week_start_date:prevWeekStart, week_end_date:prevWeekEnd,
+            total_points:totalStars, goal_stars:goalStars, money_stars:moneyStars
+          },{onConflict:'family_id,child_id,week_start_date,week_end_date'});
+        }
       }catch(e){ console.error('[Archive] weekly_payments',e); }
     }
   }
@@ -2987,7 +2996,7 @@ function init(){
   // Banner de nova versão via Supabase app_config
   (async()=>{
     if(!revClient) return;
-    const LOCAL_VERSION='2.1.2';
+    const LOCAL_VERSION='2.1.3';
     const CACHE_KEY='kidstasks_update_check', CACHE_TTL=24*60*60*1000;
     const cached=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
     if(cached && Date.now()-cached.ts<CACHE_TTL) return;
@@ -3021,7 +3030,7 @@ function init(){
     if(!deviceId){ deviceId=crypto.randomUUID(); localStorage.setItem('kidstasks_device_id',deviceId); }
     try{
       await revClient.from('app_pings').upsert(
-        {app_name:'KidsTasks',version:'2.1.2',device_id:deviceId,ping_date:today},
+        {app_name:'KidsTasks',version:'2.1.3',device_id:deviceId,ping_date:today},
         {onConflict:'app_name,device_id,ping_date',ignoreDuplicates:true}
       );
       localStorage.setItem(PING_KEY,today);

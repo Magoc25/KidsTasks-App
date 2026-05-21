@@ -5,6 +5,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [2.1.3] — Maio 2026
+
+### 🐛 Correções
+
+- **`archiveWeek()` sobrescrevia dados corretos no Supabase com instâncias parciais** — ao abrir o app em um segundo dispositivo com dados locais desatualizados, a função detectava virada de semana e fazia upsert em `weekly_payments` com totais menores do que o correto, apagando os dados reais. Corrigido: antes do upsert, compara com o valor já existente no Supabase; se o Supabase tiver `total_points` maior, o upsert é ignorado e um aviso é emitido no console.
+
+---
+
 ## [2.1.2] — Maio 2026
 
 ### 🐛 Correções
