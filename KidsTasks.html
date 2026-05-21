@@ -1684,6 +1684,7 @@ function renderGoalsList(){
   }
   list.innerHTML='';
   goals.forEach(goal=>{
+    if(goal.delivered) return; // já está em "Metas concluídas" — não mostrar na lista ativa
     const target = Math.max(1, parseInt(goal.targetStars,10)||1);
     const pct=target>0?Math.min(100,Math.round((total/target)*100)):0;
     const reached=total>=target;
@@ -1699,7 +1700,7 @@ function renderGoalsList(){
       <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
         <span style="color:var(--slate);font-size:14px">${reached?'🎉 Meta atingida!':`Faltam ${Math.max(0,target-total)} ⭐`}</span>
         <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-          ${goal.delivered?'<span class="badge ok">Entregue ✅</span>':(reached?'<button class="btn btn-primary" style="height:40px" data-act="deliver">🎁 Marcar entregue</button>':'')}
+          ${reached?'<button class="btn btn-primary" style="height:40px" data-act="deliver">🎁 Marcar entregue</button>':''}
           <button class="btn btn-secondary" style="height:40px" data-act="edit">Editar</button>
           <button class="btn btn-secondary" style="height:40px" data-act="delete">Excluir</button>
         </div>
@@ -1717,6 +1718,7 @@ function renderGoalsList(){
         state.goalsHistory.unshift({id:`gh_${goal.id}_${Date.now()}`,goalId:String(goal.id),childId:goal.childId,childName:_child.name,title:goal.title,icon:goal.icon||'🏆',targetStars:goal.targetStars,deliveredAt:goal.deliveredAt});
         saveState();
         renderAll();
+        if(supabaseClient && isUuidLike(String(goal.id))) updateGoalInSupabase(goal).catch(()=>{});
       });
     }
 
@@ -2985,7 +2987,7 @@ function init(){
   // Banner de nova versão via Supabase app_config
   (async()=>{
     if(!revClient) return;
-    const LOCAL_VERSION='2.1.1';
+    const LOCAL_VERSION='2.1.2';
     const CACHE_KEY='kidstasks_update_check', CACHE_TTL=24*60*60*1000;
     const cached=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
     if(cached && Date.now()-cached.ts<CACHE_TTL) return;
@@ -3019,7 +3021,7 @@ function init(){
     if(!deviceId){ deviceId=crypto.randomUUID(); localStorage.setItem('kidstasks_device_id',deviceId); }
     try{
       await revClient.from('app_pings').upsert(
-        {app_name:'KidsTasks',version:'2.1.1',device_id:deviceId,ping_date:today},
+        {app_name:'KidsTasks',version:'2.1.2',device_id:deviceId,ping_date:today},
         {onConflict:'app_name,device_id,ping_date',ignoreDuplicates:true}
       );
       localStorage.setItem(PING_KEY,today);

@@ -5,6 +5,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [2.1.2] — Maio 2026
+
+### 🐛 Correções
+
+- **"Marcar entregue" não persistia no Supabase** — ao recarregar o app (Ctrl+Shift+R ou trocar de dispositivo), o Supabase sobrescrevia o estado local com `delivered:false`, fazendo a meta voltar para a lista ativa. Corrigido: o handler agora chama `updateGoalInSupabase()` após salvar localmente.
+- **Painel do responsável (Metas)** — metas com `delivered:true` ainda apareciam na lista ativa com barra e "🎉 Meta atingida!". Corrigido: o mesmo filtro do painel da criança foi aplicado ao painel do responsável; metas entregues aparecem apenas em "🎖️ Metas concluídas".
+
+---
+
 ## [2.1.1] — Maio 2026
 
 ### 🐛 Correções
