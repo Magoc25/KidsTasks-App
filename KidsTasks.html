@@ -12,6 +12,7 @@
 -->
 <meta name="description" content="KidsTasks — tarefas infantis com aprovação por estrelas e sincronização opcional via Supabase." />
 <title>KidsTasks</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://api.qrserver.com https://chart.googleapis.com; connect-src 'self' https://*.supabase.co; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';">
 <link rel="manifest" href="./manifest.json" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -2981,7 +2982,7 @@ function init(){
   // Banner de nova versão via Supabase app_config
   (async()=>{
     if(!revClient) return;
-    const LOCAL_VERSION='2.0.1';
+    const LOCAL_VERSION='2.1.0';
     const CACHE_KEY='kidstasks_update_check', CACHE_TTL=24*60*60*1000;
     const cached=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
     if(cached && Date.now()-cached.ts<CACHE_TTL) return;
@@ -3015,7 +3016,7 @@ function init(){
     if(!deviceId){ deviceId=crypto.randomUUID(); localStorage.setItem('kidstasks_device_id',deviceId); }
     try{
       await revClient.from('app_pings').upsert(
-        {app_name:'KidsTasks',version:'2.0.1',device_id:deviceId,ping_date:today},
+        {app_name:'KidsTasks',version:'2.1.0',device_id:deviceId,ping_date:today},
         {onConflict:'app_name,device_id,ping_date',ignoreDuplicates:true}
       );
       localStorage.setItem(PING_KEY,today);

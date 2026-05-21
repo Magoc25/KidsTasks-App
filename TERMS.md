@@ -1,6 +1,6 @@
 # Termos de Uso e Licença — KidsTasks
 
-**Versão:** 2.0.1
+**Versão:** 2.1.0
 **Data:** Maio de 2026
 **Autor:** Marlon Gomes da Costa (MGC Dev)
 
@@ -64,13 +64,35 @@ O app **não realiza transações financeiras reais** — o registro de pagament
 
 ---
 
-## 6. Dados e privacidade
+## 6. Dados, privacidade e acessibilidade
 
-- O KidsTasks **não coleta dados pessoais** de forma automática.
+Os documentos abaixo detalham integralmente as práticas de tratamento de dados e a política de segurança do KidsTasks:
+
+- [PRIVACY.md](./PRIVACY.md) — Aviso de Privacidade ([LGPD Art. 9º](https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm))
+- [SECURITY.md](./SECURITY.md) — Política de Segurança e Plano de Resposta a Incidentes ([LGPD Arts. 46–49](https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm) + [Resolução CD/ANPD nº 15/2024](https://www.gov.br/anpd/pt-br/acesso-a-informacao/institucional/atos-normativos/regulamentacoes_anpd))
+- [ACCESSIBILITY.md](./ACCESSIBILITY.md) — Declaração de Acessibilidade ([LBI Art. 63](https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2015/lei/l13146.htm) + WCAG 2.2)
+- [DATA_INVENTORY.md](./DATA_INVENTORY.md) — Inventário de Tratamento de Dados ([LGPD Art. 37](https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm))
+
+Em resumo:
+
 - Os dados da família (nomes, tarefas, pontos) ficam armazenados **localmente no navegador** do usuário via `localStorage`.
 - Quando o usuário configura o Supabase opcional, os dados são sincronizados **no projeto Supabase do próprio usuário** — o autor não tem acesso a esses dados.
-- O sistema de avaliações (☕ Apoiar / ⭐ Avaliações) usa um Supabase compartilhado gerenciado pelo autor, contendo apenas: nome do avaliador, comentário, número de estrelas e data. Não são coletados dados bancários.
-- O app envia **um ping anônimo por dia** ao Supabase do autor para contagem de dispositivos ativos. O ping contém apenas: nome do app, versão, data e um identificador aleatório gerado no dispositivo (sem vínculo com dados pessoais, família ou histórico de tarefas). Não é possível identificar o usuário a partir deste dado.
+- O sistema de avaliações usa um Supabase compartilhado gerenciado pelo autor, contendo apenas: nome do avaliador, comentário, número de estrelas e data. Não são coletados dados bancários.
+- O app envia **um ping anônimo por dia** ao Supabase do autor para contagem de dispositivos ativos, contendo apenas um identificador aleatório sem vínculo com dados pessoais.
+
+---
+
+## 6.1 Obrigações do usuário sobre atualizações de segurança
+
+O KidsTasks disponibiliza atualizações de segurança por meio do banner de nova versão exibido automaticamente no app. O usuário tem a responsabilidade de aplicar as atualizações disponibilizadas em prazo razoável.
+
+Em conformidade com o princípio da **culpa concorrente** previsto no [Art. 945 do Código Civil](https://www.planalto.gov.br/ccivil_03/leis/2002/l10406compilada.htm) e com o [Art. 12, §3º do Código de Defesa do Consumidor](https://www.planalto.gov.br/ccivil_03/leis/l8078compilado.htm), o autor não se responsabiliza por danos decorrentes de vulnerabilidades em versões anteriores nas seguintes condições:
+
+1. A vulnerabilidade foi corrigida e documentada no [CHANGELOG.md](./CHANGELOG.md) com a tag `🔒 Security`;
+2. O usuário foi notificado por meio do banner de atualização integrado ao app;
+3. O usuário manteve em uso a versão vulnerável mesmo após a notificação.
+
+O mecanismo de banner e o log de versões no CHANGELOG constituem o canal oficial de comunicação de atualizações de segurança do KidsTasks.
 
 ---
 

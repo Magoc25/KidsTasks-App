@@ -8,7 +8,7 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 > Não representa, não é financiado e não tem vínculo institucional com o IFMA
 > ou qualquer outra organização.
 
-[![Versão](https://img.shields.io/badge/versão-2.0.1-blue)](#changelog)
+[![Versão](https://img.shields.io/badge/versão-2.1.0-blue)](#changelog)
 [![Licença](https://img.shields.io/badge/licença-não%20comercial-orange)](#licença)
 [![PIX](https://img.shields.io/badge/apoie-PIX-brightgreen)](#apoiar)
 [![Dispositivos ativos](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/Magoc25/KidsTasks-App/master/stats.json&query=$.active_30d&label=dispositivos%20ativos%20(30d)&color=blue&suffix=%20dispositivos)](./stats.json)
@@ -233,6 +233,23 @@ CREATE POLICY "goals_anon"           ON public.goals           FOR ALL TO anon U
 ```
 
 5. Execute cada bloco separadamente. Ao final, vá em **Table Editor** e confirme que as **6 tabelas** aparecem: `families`, `children`, `tasks`, `task_instances`, `weekly_payments`, `goals`.
+
+---
+
+**Bloco 5b — GRANTs de acesso _(obrigatório a partir de 30/05/2026)_:**
+
+> ⚠️ A partir de **30/05/2026**, o Supabase exige `GRANT` explícito para que as tabelas sejam acessíveis via supabase-js. Sem esse bloco, o app retorna o erro `42501 — permission denied`. Execute uma única vez após criar as tabelas.
+
+```sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.families        TO anon, authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.children        TO anon, authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.tasks           TO anon, authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.task_instances  TO anon, authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.weekly_payments TO anon, authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.goals           TO anon, authenticated, service_role;
+```
+
+> **Verificação:** se o app exibir o erro `42501` ao tentar sincronizar, execute este bloco e tente novamente.
 
 ---
 

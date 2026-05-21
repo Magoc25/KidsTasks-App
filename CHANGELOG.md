@@ -5,6 +5,23 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [2.1.0] — Maio 2026
+
+### 🔒 Segurança e conformidade legal
+
+- Adição de `Content-Security-Policy` no `<head>` do HTML — bloqueia scripts externos não autorizados, restringe conexões a `*.supabase.co` e impede exfiltração de dados via XSS.
+- Criação de `PRIVACY.md` — Aviso de Privacidade completo (LGPD Art. 9º + Art. 14 + Art. 18 + Art. 33), detalhando as três camadas de dados e o tratamento de dados de menores.
+- Criação de `SECURITY.md` — Política de Segurança e Plano de Resposta a Incidentes (LGPD Arts. 46–49 + Resolução CD/ANPD nº 15/2024).
+- Criação de `ACCESSIBILITY.md` — Declaração de Acessibilidade (LBI Art. 63 + WCAG 2.2 + ABNT NBR 17225:2025).
+- Criação de `DATA_INVENTORY.md` — Inventário simplificado de tratamento de dados (LGPD Art. 37 + ATPP).
+
+### 📄 Documentação
+
+- Atualização de `TERMS.md` (v2.1.0): referências cruzadas para os quatro novos documentos legais e adição de cláusula de obrigações do usuário sobre atualizações de segurança (CC Art. 945 + CDC Art. 12 §3º).
+- Atualização de `README.md`: adição do Bloco 5b (GRANTs explícitos de acesso) nas instruções do Supabase — obrigatório a partir de 30/05/2026.
+
+---
+
 ## [2.0.1] — Maio 2026
 
 ### 📄 Documentação e licenciamento
