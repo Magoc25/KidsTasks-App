@@ -5,6 +5,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [2.1.5] — Maio 2026
+
+### 🐛 Correções
+
+- **"🎖️ Conquistas" e "🎖️ Metas concluídas" não apareciam em dispositivos novos** — `goalsHistory` é armazenado apenas em localStorage; ao abrir o app em um dispositivo sem histórico local, as seções de conquistas ficavam vazias mesmo com metas entregues no Supabase. Corrigido: `loadGoalsFromSupabase()` agora verifica metas com `delivered:true` e, para cada uma sem entrada correspondente em `goalsHistory`, cria a entrada automaticamente a partir dos dados do Supabase.
+
+---
+
 ## [2.1.4] — Maio 2026
 
 ### 🐛 Correções

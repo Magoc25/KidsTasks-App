@@ -1371,6 +1371,27 @@ async function loadGoalsFromSupabase(){
     delivered:!!r.delivered,
     deliveredAt:r.delivered_at||null
   })));
+
+  // Recuperação: se meta está delivered no Supabase mas goalsHistory local não tem entrada,
+  // cria a entrada automaticamente (garante que Conquistas apareça em dispositivos novos)
+  state.goalsHistory = state.goalsHistory || [];
+  rows.filter(r => r.delivered && r.delivered_at).forEach(r => {
+    const goalId = String(r.id);
+    if(!state.goalsHistory.some(h => String(h.goalId) === goalId)){
+      const child = (state.childrenList||[]).find(c => c.id === (r.child_id||state.childId));
+      state.goalsHistory.unshift({
+        id:`gh_${goalId}_${r.delivered_at}`,
+        goalId,
+        childId:r.child_id||state.childId,
+        childName:child?.name||'Criança',
+        title:r.title||'Meta',
+        icon:r.icon||'🏆',
+        targetStars:Math.max(1,parseInt(r.target_stars,10)||1),
+        deliveredAt:r.delivered_at
+      });
+    }
+  });
+
   saveState();
 }
 
@@ -2997,7 +3018,7 @@ function init(){
   // Banner de nova versão via Supabase app_config
   (async()=>{
     if(!revClient) return;
-    const LOCAL_VERSION='2.1.4';
+    const LOCAL_VERSION='2.1.5';
     const CACHE_KEY='kidstasks_update_check', CACHE_TTL=24*60*60*1000;
     const cached=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
     if(cached && Date.now()-cached.ts<CACHE_TTL) return;
@@ -3031,7 +3052,7 @@ function init(){
     if(!deviceId){ deviceId=crypto.randomUUID(); localStorage.setItem('kidstasks_device_id',deviceId); }
     try{
       await revClient.from('app_pings').upsert(
-        {app_name:'KidsTasks',version:'2.1.4',device_id:deviceId,ping_date:today},
+        {app_name:'KidsTasks',version:'2.1.5',device_id:deviceId,ping_date:today},
         {onConflict:'app_name,device_id,ping_date',ignoreDuplicates:true}
       );
       localStorage.setItem(PING_KEY,today);
