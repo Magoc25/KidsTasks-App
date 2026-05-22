@@ -5,6 +5,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [2.1.4] — Maio 2026
+
+### 🐛 Correções
+
+- **Estrelas de aprovação quebravam linha no mobile** — `.starPick` sem `white-space:nowrap` permitia que os 5 botões de estrela fossem para a próxima linha em telas estreitas, dificultando identificar qual era a 5ª estrela. Corrigido com `display:flex;flex-wrap:nowrap` no container.
+
+---
+
 ## [2.1.3] — Maio 2026
 
 ### 🐛 Correções

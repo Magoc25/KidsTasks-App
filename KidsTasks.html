@@ -197,7 +197,8 @@
 .cloud-connected .cloud-dot{background:var(--success)}
 .cloud-error .cloud-dot{background:var(--error)}
 .toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);z-index:99;background:#111827;color:#fff;padding:10px 14px;border-radius:12px;font-size:14px;box-shadow:rgba(0,0,0,.22) 0 12px 26px -14px}
-.starPick button{background:transparent;border:none;font-size:18px;cursor:pointer;line-height:1;padding:0 2px;color:#4b5563}
+.starPick{white-space:nowrap;display:flex;flex-wrap:nowrap;align-items:center}
+.starPick button{background:transparent;border:none;font-size:18px;cursor:pointer;line-height:1;padding:0 2px;color:#4b5563;flex:none}
 .starPick button.on{color:#facc15}
 .hist-card{border:1px solid var(--hairline);border-radius:var(--r-card);padding:14px;margin-bottom:10px;border-left:4px solid var(--warning)}
 .hist-card.paid{border-left-color:var(--success)}
@@ -2996,7 +2997,7 @@ function init(){
   // Banner de nova versão via Supabase app_config
   (async()=>{
     if(!revClient) return;
-    const LOCAL_VERSION='2.1.3';
+    const LOCAL_VERSION='2.1.4';
     const CACHE_KEY='kidstasks_update_check', CACHE_TTL=24*60*60*1000;
     const cached=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
     if(cached && Date.now()-cached.ts<CACHE_TTL) return;
@@ -3030,7 +3031,7 @@ function init(){
     if(!deviceId){ deviceId=crypto.randomUUID(); localStorage.setItem('kidstasks_device_id',deviceId); }
     try{
       await revClient.from('app_pings').upsert(
-        {app_name:'KidsTasks',version:'2.1.3',device_id:deviceId,ping_date:today},
+        {app_name:'KidsTasks',version:'2.1.4',device_id:deviceId,ping_date:today},
         {onConflict:'app_name,device_id,ping_date',ignoreDuplicates:true}
       );
       localStorage.setItem(PING_KEY,today);
