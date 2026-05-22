@@ -5,6 +5,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [2.2.0] — Maio 2026
+
+### 🆕 Adicionado
+
+- **Mensagens motivacionais ao concluir tarefa** — ao marcar uma tarefa como feita, uma mensagem animada aparece no centro da tela por 1s (ex: "Arrasou! ⭐", "Mandou bem! 🎉", "Que orgulho! ✨") sorteada aleatoriamente entre 10 opções.
+- **Botão "✅ Aprovar todas"** — no cabeçalho do painel de aprovações; aprova todas as tarefas pendentes do dia de uma vez, usando as estrelas sugeridas por tarefa (baseado no cronômetro, se configurado).
+- **Período semanal configurável** — em Configurações → Período semanal: escolha entre Dom–Sáb (padrão), Seg–Dom ou Seg–Sex (dias úteis). O app recalcula semana e histórico com base na opção salva. O cabeçalho do painel de semana exibe o período correto dinamicamente.
+
+---
+
 ## [2.1.5] — Maio 2026
 
 ### 🐛 Correções

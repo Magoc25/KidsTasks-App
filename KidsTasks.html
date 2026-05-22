@@ -313,7 +313,7 @@
       </section>
 
       <section class="card" id="panelApprovals">
-        <div class="hd"><h2>Aprovações do dia</h2><div class="meta">clique em ★ para aprovar com 1–5 estrelas</div></div>
+        <div class="hd"><h2>Aprovações do dia</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><div class="meta">clique em ★ para aprovar com 1–5 estrelas</div><button onclick="approveAll()" class="btn btn-primary" type="button" style="height:30px;font-size:12px;padding:0 12px;white-space:nowrap">✅ Aprovar todas</button></div></div>
         <div class="bd">
           <div class="table-wrap"><table class="table"><thead><tr><th>Tarefa</th><th>⭐</th><th>Tempo</th><th>Status</th><th>Ações</th></tr></thead><tbody id="approvalsBody"></tbody></table></div>
         </div>
@@ -443,6 +443,24 @@
                 <button class="btn btn-primary" id="loadFamilyBtn" type="button">🔍 Buscar família</button>
                 <button class="btn btn-secondary" id="refreshChildrenBtn" type="button">Atualizar lista</button>
               </div>
+            </div>
+          </div>
+
+          <div class="card" style="box-shadow:none;background:var(--surface);margin-bottom:12px">
+            <div class="bd">
+              <h3 style="margin:0 0 10px;font-size:16px">📅 Período semanal</h3>
+              <p style="margin:0 0 12px;color:var(--slate);font-size:14px;line-height:1.5">Define quando começa e termina cada semana de tarefas.</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+                <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Fechamento da semana
+                  <select class="input" id="settingWeekMode" style="width:200px">
+                    <option value="dom-sab">Dom–Sáb (padrão)</option>
+                    <option value="seg-dom">Seg–Dom</option>
+                    <option value="seg-sex">Seg–Sex (dias úteis)</option>
+                  </select>
+                </label>
+                <button class="btn btn-secondary" id="settingWeekModeSaveBtn" type="button">Salvar</button>
+              </div>
+              <p style="font-size:12px;color:var(--slate);margin:8px 0 0">⚠️ Alterar no meio da semana pode afetar o histórico atual.</p>
             </div>
           </div>
 
@@ -919,6 +937,36 @@ function timerLabel(elapsedSec, targetMin){
   if(diff<=0) return `✅ ${formatElapsed(elapsedSec)} (meta: ${targetMin}min)`;
   return `⚠️ ${formatElapsed(elapsedSec)} (+${formatElapsed(diff)} acima de ${targetMin}min)`;
 }
+const _msgs=['Arrasou! ⭐','Que capricho! 🌟','Mandou bem! 🎉','Incrível! 💪','Você é demais! 🏆','Parabéns! 👏','Que orgulho! ✨','Perfeito! 🌈','Isso sim! 🎯','Uau! 🥳'];
+function showMotivationalMessage(){
+  const el=document.createElement('div');
+  el.textContent=_msgs[Math.floor(Math.random()*_msgs.length)];
+  el.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0);z-index:9998;background:var(--primary);color:#fff;padding:14px 26px;border-radius:16px;font-size:20px;font-weight:700;text-align:center;pointer-events:none;box-shadow:0 8px 32px rgba(0,0,0,.22);transition:transform .25s cubic-bezier(.34,1.56,.64,1)';
+  document.body.appendChild(el);
+  requestAnimationFrame(()=>{
+    el.style.transform='translate(-50%,-50%) scale(1)';
+    setTimeout(()=>{ el.style.transition='transform .2s ease,opacity .3s ease'; el.style.opacity='0'; el.style.transform='translate(-50%,-60%) scale(.9)'; setTimeout(()=>el.remove(),300); },1000);
+  });
+}
+
+async function approveAll(){
+  const today=getTodayISO();
+  const cid=activeChildId();
+  const ptasks=tasksForChild(cid);
+  const awaiting=instancesForChild(cid).filter(i=>i.date===today&&i.status==='child_marked');
+  if(!awaiting.length) return toast('Nenhuma tarefa pendente hoje','error');
+  _lastLocalChange=Date.now();
+  for(const inst of awaiting){
+    const task=ptasks.find(t=>t.id===inst.taskId);
+    inst.status='approved';
+    inst.approvedStars=suggestedStars(inst,task);
+  }
+  saveState();
+  if(supabaseClient) await Promise.all(awaiting.map(i=>syncInstanceToSupabase(i).catch(()=>{})));
+  toast(`${awaiting.length} tarefa(s) aprovadas ✅`,'ok');
+  renderAll();
+}
+
 function suggestedStars(inst, task){
   if(!task.hasTimer||!task.targetMinutes||!inst.elapsedSeconds) return task.points;
   const ratio=inst.elapsedSeconds/(task.targetMinutes*60);
@@ -1002,6 +1050,7 @@ const defaultState={
   childrenList:[],
   pointValueBRL:0.10,
   showMoneyToChild:false,
+  weekMode:'dom-sab',
   weekPaid:false,
   lastWeekStart:'',
   weekHistory:[],
@@ -1075,14 +1124,19 @@ function getTodayISO(){
 function getWeekRange(){
   const today=getTodayISO();
   const [y,m,d]=today.split('-').map(Number);
-  const date=new Date(y,m-1,d); // meia-noite local — aritmética sem fuso
-  const day=date.getDay(); // 0=Dom, 6=Sáb
-  const sun=new Date(y,m-1,d-day);
-  const sat=new Date(y,m-1,d-day+6);
+  const date=new Date(y,m-1,d);
+  const dayOfWeek=date.getDay(); // 0=Dom … 6=Sáb
+  const mode=state.weekMode||'dom-sab';
+  const startDay=mode==='dom-sab'?0:1; // 0=Dom, 1=Seg
+  const daysCount=mode==='seg-sex'?5:7;
+  const daysToStart=(dayOfWeek-startDay+7)%7;
+  const start=new Date(y,m-1,d-daysToStart);
+  const end=new Date(y,m-1,d-daysToStart+daysCount-1);
   const pad=n=>String(n).padStart(2,'0');
   const fmt=dt=>`${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}`;
-  return {start:fmt(sun),end:fmt(sat)};
+  return {start:fmt(start),end:fmt(end)};
 }
+const _weekModeLabel={'dom-sab':'Dom–Sáb','seg-dom':'Seg–Dom','seg-sex':'Seg–Sex'};
 function getInstanceStars(inst, task){
   const base=(task && typeof task.points==='number')?task.points:1;
   const s=(inst && typeof inst.approvedStars==='number')?inst.approvedStars:base;
@@ -1625,6 +1679,7 @@ function renderChild(){
       actionEl.addEventListener('click', async ()=>{
         if(inst.status==='approved') return;
         inst.status=(inst.status==='child_marked')?'pending':'child_marked';
+        if(inst.status==='child_marked') showMotivationalMessage();
         inst.approvedStars=null; _lastLocalChange=Date.now(); saveState();
         if(supabaseClient) await syncInstanceToSupabase(inst);
         renderAll();
@@ -1853,7 +1908,7 @@ function renderParent(){
   // week
   const _curWeek=getWeekRange();
   const _weekHeaderEl=$('#weekPanelHeader');
-  if(_weekHeaderEl) _weekHeaderEl.textContent=`Dom–Sáb · ${fmtWeekLabel(_curWeek.start,_curWeek.end)}`;
+  if(_weekHeaderEl) _weekHeaderEl.textContent=`${_weekModeLabel[state.weekMode||'dom-sab']} · ${fmtWeekLabel(_curWeek.start,_curWeek.end)}`;
   $('#weekApproved').textContent=sum.weekApprovedCount;
   $('#weekPoints').textContent=sum.weekApprovedStars;
   $('#weekMoney').textContent=sum.moneyBRL.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -1912,6 +1967,7 @@ function renderParent(){
   renderGoalsList();
 
   // settings
+  $('#settingWeekMode').value=state.weekMode||'dom-sab';
   $('#toggleShowMoney').checked=!!state.showMoneyToChild;
   $('#settingPointValue').value=parseFloat(state.pointValueBRL)||0.10;
   $('#settingPointValuePreview').textContent=`10 ⭐ = ${(10*(parseFloat(state.pointValueBRL)||0.10)).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}`;
@@ -2885,6 +2941,7 @@ function bindEvents(){
   $('#reviewListToPixBtn').addEventListener('click', ()=>{ closeReviewsModal(); openPixModal(); });
 
   // settings
+  $('#settingWeekModeSaveBtn').addEventListener('click', ()=>{ state.weekMode=$('#settingWeekMode').value||'dom-sab'; saveState(); toast('Período semanal salvo','ok'); renderAll(); });
   $('#toggleShowMoney').addEventListener('change', (e)=>{ state.showMoneyToChild=e.target.checked; saveState(); toast('Salvo','ok'); });
   $('#settingPointValueSaveBtn').addEventListener('click', ()=>{ const v=parseFloat($('#settingPointValue').value); if(!v||v<=0) return toast('Digite um valor válido','error'); state.pointValueBRL=v; saveState(); toast('Taxa salva','ok'); renderAll(); });
   // Timer overlay
@@ -3018,7 +3075,7 @@ function init(){
   // Banner de nova versão via Supabase app_config
   (async()=>{
     if(!revClient) return;
-    const LOCAL_VERSION='2.1.5';
+    const LOCAL_VERSION='2.2.0';
     const CACHE_KEY='kidstasks_update_check', CACHE_TTL=24*60*60*1000;
     const cached=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
     if(cached && Date.now()-cached.ts<CACHE_TTL) return;
@@ -3052,7 +3109,7 @@ function init(){
     if(!deviceId){ deviceId=crypto.randomUUID(); localStorage.setItem('kidstasks_device_id',deviceId); }
     try{
       await revClient.from('app_pings').upsert(
-        {app_name:'KidsTasks',version:'2.1.5',device_id:deviceId,ping_date:today},
+        {app_name:'KidsTasks',version:'2.2.0',device_id:deviceId,ping_date:today},
         {onConflict:'app_name,device_id,ping_date',ignoreDuplicates:true}
       );
       localStorage.setItem(PING_KEY,today);
