@@ -144,17 +144,6 @@ Se quiser que os dados apareçam no PC **e** no celular automaticamente, configu
 2. Clique em **+ New query**
 3. Cole o bloco abaixo e clique em **Run** (▶)
 
-**Bloco 1 — Limpar tabelas existentes (se houver):**
-```sql
-DROP TABLE IF EXISTS public.goals            CASCADE;
-DROP TABLE IF EXISTS public.weekly_payments  CASCADE;
-DROP TABLE IF EXISTS public.task_instances   CASCADE;
-DROP TABLE IF EXISTS public.tasks            CASCADE;
-DROP TABLE IF EXISTS public.children         CASCADE;
-DROP TABLE IF EXISTS public.families         CASCADE;
-```
-
-**Bloco 2 — Criar tabelas (schema v2.0):**
 ```sql
 CREATE TABLE public.families (
   id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -227,74 +216,31 @@ CREATE TABLE public.goals (
   delivered_at timestamptz,
   created_at   timestamptz NOT NULL DEFAULT now()
 );
-```
 
-**Bloco 3 — Índices de performance:**
-```sql
+-- Índices de performance
 CREATE INDEX idx_children_family_id          ON public.children(family_id);
 CREATE INDEX idx_tasks_family_child          ON public.tasks(family_id, child_id);
 CREATE INDEX idx_task_instances_family_child ON public.task_instances(family_id, child_id, date);
 CREATE INDEX idx_weekly_payments_family      ON public.weekly_payments(family_id, child_id, week_start_date, week_end_date);
 CREATE INDEX idx_goals_family_child          ON public.goals(family_id, child_id);
-```
 
-**Bloco 4 — Ativar segurança (RLS):**
-```sql
+-- Segurança: Row Level Security
 ALTER TABLE public.families        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.children        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tasks           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.task_instances  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.weekly_payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.goals           ENABLE ROW LEVEL SECURITY;
-```
 
-**Bloco 5 — Permissões de acesso (single-tenant):**
-```sql
+-- Políticas de acesso (single-tenant: uma família por projeto)
 CREATE POLICY "families_anon"        ON public.families        FOR ALL TO anon USING (true) WITH CHECK (true);
 CREATE POLICY "children_anon"        ON public.children        FOR ALL TO anon USING (true) WITH CHECK (true);
 CREATE POLICY "tasks_anon"           ON public.tasks           FOR ALL TO anon USING (true) WITH CHECK (true);
 CREATE POLICY "task_instances_anon"  ON public.task_instances  FOR ALL TO anon USING (true) WITH CHECK (true);
 CREATE POLICY "weekly_payments_anon" ON public.weekly_payments FOR ALL TO anon USING (true) WITH CHECK (true);
 CREATE POLICY "goals_anon"           ON public.goals           FOR ALL TO anon USING (true) WITH CHECK (true);
-```
 
-Execute cada bloco separadamente. Ao final, vá em **Table Editor** e confirme que as **6 tabelas** aparecem: `families`, `children`, `tasks`, `task_instances`, `weekly_payments`, `goals`.
-
----
-
-**Bloco 2b — Migração de schema _(só se você criou as tabelas com uma versão anterior deste README)_:**
-
-> 🔁 Quem está criando agora (Blocos 1–5) **pode pular** — as tabelas já vêm corretas. Este bloco apenas alinha bancos antigos ao app (é idempotente e seguro rodar de novo).
-
-```sql
-ALTER TABLE public.children        ADD COLUMN IF NOT EXISTS avatar_data text;
-ALTER TABLE public.weekly_payments ADD COLUMN IF NOT EXISTS goal_stars  integer NOT NULL DEFAULT 0;
-ALTER TABLE public.weekly_payments ADD COLUMN IF NOT EXISTS money_stars integer NOT NULL DEFAULT 0;
-
--- Remove instâncias duplicadas mantendo a "melhor" (aprovada > marcada > recusada > pendente)
--- antes de criar a UNIQUE. O id é UUID aleatório, então não dá pra confiar em "maior id".
-DELETE FROM public.task_instances a USING public.task_instances b
-  WHERE a.family_id = b.family_id AND a.child_id = b.child_id
-    AND a.task_id = b.task_id AND a.date = b.date AND a.id <> b.id
-    AND (
-          CASE b.status WHEN 'approved' THEN 3 WHEN 'child_marked' THEN 2 WHEN 'rejected' THEN 1 ELSE 0 END,
-          COALESCE(b.approved_stars, 0), b.id
-        ) > (
-          CASE a.status WHEN 'approved' THEN 3 WHEN 'child_marked' THEN 2 WHEN 'rejected' THEN 1 ELSE 0 END,
-          COALESCE(a.approved_stars, 0), a.id
-        );
-
-ALTER TABLE public.task_instances
-  ADD CONSTRAINT task_instances_unique_day UNIQUE (family_id, child_id, task_id, date);
-```
-
----
-
-**Bloco 5b — GRANTs de acesso _(obrigatório a partir de 30/05/2026)_:**
-
-> ⚠️ A partir de **30/05/2026**, o Supabase exige `GRANT` explícito para que as tabelas sejam acessíveis via supabase-js. Sem esse bloco, o app retorna o erro `42501 — permission denied`. Execute uma única vez após criar as tabelas.
-
-```sql
+-- Permissões de acesso (necessárias para o app ler/gravar via supabase-js)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.families        TO anon, authenticated, service_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.children        TO anon, authenticated, service_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.tasks           TO anon, authenticated, service_role;
@@ -303,11 +249,11 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.weekly_payments TO anon, authenti
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.goals           TO anon, authenticated, service_role;
 ```
 
-> **Verificação:** se o app exibir o erro `42501` ao tentar sincronizar, execute este bloco e tente novamente.
+Ao final, vá em **Table Editor** e confirme que as **6 tabelas** aparecem: `families`, `children`, `tasks`, `task_instances`, `weekly_payments`, `goals`.
 
 ---
 
-**Bloco 6 — Evitar suspensão por inatividade _(opcional, mas recomendado)_:**
+**Evitar suspensão por inatividade _(opcional)_:**
 
 > ⚠️ **Este bloco não é obrigatório para o app funcionar.** O KidsTasks opera normalmente sem ele. Serve apenas para evitar que o Supabase suspenda seu projeto quando você não abrir o app por 7 dias seguidos.
 
