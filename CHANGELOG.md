@@ -5,6 +5,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [2.4.1] — Junho 2026
+
+### 🔧 Melhorias
+
+- **Checagem de atualização mais robusta** — a versão deste build virou uma constante única (`APP_VERSION`) e a comparação com a versão publicada (`app_config`) ficou à prova de valores malformados. O banner de "nova versão" só dispara quando o app em execução está **realmente desatualizado** (versão publicada > versão do build), evitando aviso indevido.
+
+---
+
 ## [2.4.0] — Junho 2026
 
 ### 🆕 Adicionado

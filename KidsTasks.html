@@ -2722,6 +2722,16 @@ async function importBackup(file){
   }catch(e){ toast('Erro ao importar: '+e.message,'error'); }
 }
 
+// Versão deste build — fonte única usada pela checagem de atualização
+const APP_VERSION='2.4.1';
+// Compara versões "x.y.z": 1 se a>b, -1 se a<b, 0 se iguais (ignora 'v', partes faltando ou lixo)
+function cmpVersion(a,b){
+  const pa=String(a).replace(/^v/,'').split('.').map(n=>parseInt(n,10)||0);
+  const pb=String(b).replace(/^v/,'').split('.').map(n=>parseInt(n,10)||0);
+  for(let i=0;i<Math.max(pa.length,pb.length);i++){ const x=pa[i]||0, y=pb[i]||0; if(x>y) return 1; if(x<y) return -1; }
+  return 0;
+}
+
 // PIX + Reviews
 const PROJECT_ID='kidstasks';
 const PIX_KEY='4c6086a2-4bb8-474b-a4cf-ced8c8d82189';
@@ -3221,7 +3231,6 @@ function init(){
   // Banner de nova versão via Supabase app_config
   (async()=>{
     if(!revClient) return;
-    const LOCAL_VERSION='2.4.0';
     const CACHE_KEY='kidstasks_update_check', CACHE_TTL=24*60*60*1000;
     const cached=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
     if(cached && Date.now()-cached.ts<CACHE_TTL) return;
@@ -3229,11 +3238,9 @@ function init(){
       const {data,error}=await revClient.from('app_config').select('value').eq('project_id',PROJECT_ID).eq('key','version').single();
       if(error||!data) return;
       localStorage.setItem(CACHE_KEY,JSON.stringify({ts:Date.now()}));
-      const remote=data.value.replace(/^v/,'');
-      const parse=v=>v.split('.').map(Number);
-      const [ra,rb,rc]=parse(remote); const [la,lb,lc]=parse(LOCAL_VERSION);
-      const isNewer=ra>la||(ra===la&&rb>lb)||(ra===la&&rb===lb&&rc>lc);
-      if(!isNewer) return;
+      const remote=String(data.value||'').replace(/^v/,'');
+      // Só dispara se a versão publicada (app_config) for MAIOR que a deste build (APP_VERSION)
+      if(cmpVersion(remote, APP_VERSION) <= 0) return;
       const banner=document.createElement('div');
       banner.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a73e8;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:10px 16px;font-size:14px;gap:12px;';
       banner.innerHTML=`<span>🆕 Nova versão disponível (v${remote}) — recarregue para atualizar.</span>
