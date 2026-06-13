@@ -55,6 +55,10 @@ O identificador de dispositivo (`device_id`) é um UUID aleatório gerado pelo `
 
 O código do app é hospedado no GitHub Pages como arquivo estático. Não há servidor de aplicação, banco de dados acessível publicamente sem autenticação de API, nem mecanismo de execução de código do lado do servidor. O vetor de ataque é restrito ao frontend.
 
+### 2.8 PIN do modo Responsável — controle parental, não barreira de segurança
+
+O acesso ao **modo Responsável** é protegido por um PIN configurável. Esse PIN é um **controle parental local** — impede que a criança altere aprovações e configurações por engano — e **não constitui uma barreira de segurança criptográfica**: ele fica armazenado no `localStorage` do dispositivo, em texto, e todos os dados do app já residem no próprio dispositivo. A proteção efetiva dos dados é a **segurança do próprio dispositivo** (bloqueio de tela e conta de usuário do sistema operacional). Recomenda-se não reutilizar senhas sensíveis como PIN.
+
 ---
 
 ## 3. Responsabilidades do usuário sobre atualizações

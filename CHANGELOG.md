@@ -5,6 +5,37 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [2.3.2] — Junho 2026
+
+### 🐛 Correções
+
+- **Schema do Supabase no README estava desalinhado com o app** — `children` usa `avatar_data` (o README dizia `avatar_color`) e `weekly_payments` precisa de `goal_stars`/`money_stars`. Sem isso, foto da criança e histórico semanal não sincronizavam em bancos criados a partir do README. Incluído bloco de migração para bases já existentes.
+- **"Aprovar todas" podia quebrar** diante de uma instância órfã (tarefa removida); agora ignora órfãs em vez de abortar.
+- **Instâncias duplicadas entre dispositivos** — `task_instances` ganhou `UNIQUE (family_id, child_id, task_id, date)` e a sincronização passou a usar upsert atômico (com fallback para bancos sem a constraint).
+- **Tarefas com `child_id` nulo** podiam duplicar ao alternar de criança — corrigida a substituição por id.
+- **Falha ao salvar tarefa na nuvem era silenciosa** — agora o app avisa que ela ficou salva só no dispositivo.
+
+### 🔧 Melhorias
+
+- **Histórico do responsável passa a carregar a semana de todas as crianças** (antes só a criança ativa aparecia com valores).
+- **Acessibilidade:** o banner de expandir/retrair crianças agora é acionável por teclado (`role`/`tabindex`/`aria-expanded`).
+- **Código:** removida função morta (`markHistoryPaid`) e deduplicadas as rotinas de copiar o código PIX.
+- **`SECURITY.md`:** esclarecido que o PIN do modo Responsável é um controle parental local, não uma barreira criptográfica.
+
+---
+
+## [2.3.1] — Junho 2026
+
+### 🆕 Adicionado
+
+- **Expandir/retrair as crianças no banner Família/Responsável** — toque no banner para ocultar ou mostrar a lista de crianças vinculadas (seta ▾ / ▸). Útil quando há muitas crianças, para não precisar rolar a tela. A preferência fica salva no dispositivo.
+
+### 🐛 Correções
+
+- **Número da versão no topo do app não atualizava** — ficava preso por até 6 horas num cache local (`kidstasks_app_version`). Agora o app exibe o cache imediatamente e **revalida o `CHANGELOG.md` a cada carregamento**, refletindo sempre a versão publicada.
+
+---
+
 ## [2.3.0] — Junho 2026
 
 ### 🆕 Adicionado

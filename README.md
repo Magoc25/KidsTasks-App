@@ -8,7 +8,7 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 > Não representa, não é financiado e não tem vínculo institucional com o IFMA
 > ou qualquer outra organização.
 
-[![Versão](https://img.shields.io/badge/versão-2.3.0-blue)](#-licença-e-termos-de-uso)
+[![Versão](https://img.shields.io/badge/versão-2.3.2-blue)](#-licença-e-termos-de-uso)
 [![Licença](https://img.shields.io/badge/licença-não%20comercial-orange)](#-licença-e-termos-de-uso)
 [![PIX](https://img.shields.io/badge/apoie-PIX-brightgreen)](#-apoiar-o-projeto)
 [![Dispositivos ativos](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/Magoc25/KidsTasks-App/master/stats.json&query=$.active_30d&label=dispositivos%20ativos%20(30d)&color=blue&suffix=%20dispositivos)](./stats.json)
@@ -166,7 +166,7 @@ CREATE TABLE public.children (
   id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   family_id    uuid        NOT NULL REFERENCES public.families(id) ON DELETE CASCADE,
   name         text        NOT NULL,
-  avatar_color text,
+  avatar_data  text,
   created_at   timestamptz NOT NULL DEFAULT now()
 );
 
@@ -196,7 +196,9 @@ CREATE TABLE public.task_instances (
   approved_stars   integer     CHECK (approved_stars BETWEEN 1 AND 5),
   elapsed_seconds  integer     DEFAULT NULL,
   timer_started_at timestamptz DEFAULT NULL,
-  created_at       timestamptz NOT NULL DEFAULT now()
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT task_instances_unique_day
+    UNIQUE (family_id, child_id, task_id, date)
 );
 
 CREATE TABLE public.weekly_payments (
@@ -206,6 +208,8 @@ CREATE TABLE public.weekly_payments (
   week_start_date date        NOT NULL,
   week_end_date   date        NOT NULL,
   total_points    integer     NOT NULL DEFAULT 0,
+  goal_stars      integer     NOT NULL DEFAULT 0,
+  money_stars     integer     NOT NULL DEFAULT 0,
   paid_at         timestamptz,
   created_at      timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT weekly_payments_unique_week
@@ -255,6 +259,26 @@ CREATE POLICY "goals_anon"           ON public.goals           FOR ALL TO anon U
 ```
 
 Execute cada bloco separadamente. Ao final, vá em **Table Editor** e confirme que as **6 tabelas** aparecem: `families`, `children`, `tasks`, `task_instances`, `weekly_payments`, `goals`.
+
+---
+
+**Bloco 2b — Migração de schema _(só se você criou as tabelas com uma versão anterior deste README)_:**
+
+> 🔁 Quem está criando agora (Blocos 1–5) **pode pular** — as tabelas já vêm corretas. Este bloco apenas alinha bancos antigos ao app (é idempotente e seguro rodar de novo).
+
+```sql
+ALTER TABLE public.children        ADD COLUMN IF NOT EXISTS avatar_data text;
+ALTER TABLE public.weekly_payments ADD COLUMN IF NOT EXISTS goal_stars  integer NOT NULL DEFAULT 0;
+ALTER TABLE public.weekly_payments ADD COLUMN IF NOT EXISTS money_stars integer NOT NULL DEFAULT 0;
+
+-- Remove instâncias duplicadas (mantém a de maior id) antes de criar a UNIQUE:
+DELETE FROM public.task_instances a USING public.task_instances b
+  WHERE a.id < b.id AND a.family_id = b.family_id AND a.child_id = b.child_id
+    AND a.task_id = b.task_id AND a.date = b.date;
+
+ALTER TABLE public.task_instances
+  ADD CONSTRAINT task_instances_unique_day UNIQUE (family_id, child_id, task_id, date);
+```
 
 ---
 

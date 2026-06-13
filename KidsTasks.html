@@ -144,6 +144,7 @@
 .family-banner .fb-title{font-size:17px;font-weight:700;margin:0;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .family-banner .fb-sub{font-size:12.5px;opacity:.85;margin-top:2px}
 .family-banner .fb-edit{margin-left:auto;background:rgba(255,255,255,.16);border:none;color:#fff;min-width:34px;height:34px;border-radius:9px;cursor:pointer;font-size:14px;flex:none}
+.family-banner .fb-chevron{font-size:13px;opacity:.9;flex:none;margin-left:2px;user-select:none}
 .children-nest{display:flex;flex-direction:column;gap:8px;margin-left:14px;padding-left:14px;border-left:3px solid var(--primary)}
 .children-nest:empty{display:none}
 .check{width:var(--hit);height:var(--hit);border-radius:var(--r-btn);border:1px solid var(--hairline-strong);background:#fff;cursor:pointer;display:grid;place-items:center}
@@ -964,18 +965,23 @@ async function approveAll(){
   const awaiting=instancesForChild(cid).filter(i=>i.date===today&&i.status==='child_marked');
   if(!awaiting.length) return toast('Nenhuma tarefa pendente hoje','error');
   _lastLocalChange=Date.now();
+  let _approved=0;
   for(const inst of awaiting){
     const task=ptasks.find(t=>t.id===inst.taskId);
+    if(!task) continue; // instância órfã (tarefa removida) — ignora em vez de quebrar
     inst.status='approved';
     inst.approvedStars=suggestedStars(inst,task);
+    _approved++;
   }
+  if(!_approved) return toast('Nenhuma tarefa pôde ser aprovada (tarefas não encontradas)','error');
   saveState();
-  if(supabaseClient) await Promise.all(awaiting.map(i=>syncInstanceToSupabase(i).catch(()=>{})));
-  toast(`${awaiting.length} tarefa(s) aprovadas ✅`,'ok');
+  if(supabaseClient) await Promise.all(awaiting.filter(i=>i.status==='approved').map(i=>syncInstanceToSupabase(i).catch(()=>{})));
+  toast(`${_approved} tarefa(s) aprovadas ✅`,'ok');
   renderAll();
 }
 
 function suggestedStars(inst, task){
+  if(!task) return 1;
   if(!task.hasTimer||!task.targetMinutes||!inst.elapsedSeconds) return task.points;
   const ratio=inst.elapsedSeconds/(task.targetMinutes*60);
   if(ratio<=1.0) return task.points;
@@ -1065,6 +1071,7 @@ const defaultState={
   goalsHistory:[],
   taskOrder:[],
   childPixKeys:{},
+  familyCollapsed:false,
   totalGoalStars:0,
   goals:[],
   tasks:[
@@ -1306,8 +1313,10 @@ async function loadTasksFromSupabase(){
     tint:(r.tint|| (idx%2?'peach':'mint'))
   }));
 
-  // Remove somente tarefas do supabase (uuid) da criança ativa e substitui
-  state.tasks = (state.tasks||[]).filter(t => !(t.childId===state.childId && isUuidLike(String(t.id))));
+  // Remove tarefas UUID que estão sendo recarregadas (por id) ou da criança ativa, e substitui.
+  // Evita duplicar tarefas com child_id NULL ao alternar de criança (elas "movem" p/ a ativa).
+  const incomingIds=new Set(mapped.map(t=>String(t.id)));
+  state.tasks = (state.tasks||[]).filter(t => !(isUuidLike(String(t.id)) && (incomingIds.has(String(t.id)) || t.childId===state.childId)));
   state.tasks.push(...mapped);
   // Reaplica a ordem salva pelo drag & drop (taskOrder) após carga do Supabase
   if((state.taskOrder||[]).length){
@@ -1374,18 +1383,59 @@ async function loadTaskInstancesFromSupabase(){
   saveState();
 }
 
+// Carrega instâncias da semana atual de TODAS as crianças da família (histórico do responsável)
+async function loadAllChildrenWeekInstances(){
+  if(!supabaseClient || !state.familyId) return;
+  const week=getWeekRange();
+  const {data,error}=await supabaseClient.from('task_instances')
+    .select('id,family_id,child_id,task_id,date,status,approved_stars,elapsed_seconds,timer_started_at')
+    .eq('family_id',state.familyId)
+    .gte('date',week.start).lte('date',week.end);
+  if(error||!Array.isArray(data)) return;
+  // Substitui todas as instâncias UUID da semana (de todas as crianças)
+  state.instances=(state.instances||[]).filter(i => !(i.date>=week.start && i.date<=week.end && isUuidLike(String(i.taskId))));
+  state.instances.push(...data.map(r=>({
+    id:r.id, childId:r.child_id, taskId:r.task_id, date:r.date,
+    status:r.status||'pending',
+    approvedStars:(typeof r.approved_stars==='number')?r.approved_stars:null,
+    elapsedSeconds:(typeof r.elapsed_seconds==='number')?r.elapsed_seconds:null,
+    timerStartedAt:r.timer_started_at||null
+  })));
+  saveState();
+}
+
 async function syncInstanceToSupabase(instance){
   if(!supabaseClient || !state.familyId || !instance) return false;
   const childId = instance.childId || state.childId;
   if(!childId) { console.warn('[Sync] childId ausente'); return false; }
   if(!isUuidLike(String(instance.taskId))){ console.warn('[Sync] taskId não é UUID — tarefa local, ignorando sync'); return false; }
+  instance.childId = childId;
+  const payload={family_id:state.familyId,child_id:childId,task_id:instance.taskId,date:instance.date,status:instance.status,approved_stars:(typeof instance.approvedStars==='number')?instance.approvedStars:null,elapsed_seconds:(typeof instance.elapsedSeconds==='number')?instance.elapsedSeconds:null,timer_started_at:instance.timerStartedAt||null};
   try{
-    instance.childId = childId;
-    const payload={family_id:state.familyId,child_id:childId,task_id:instance.taskId,date:instance.date,status:instance.status,approved_stars:(typeof instance.approvedStars==='number')?instance.approvedStars:null,elapsed_seconds:(typeof instance.elapsedSeconds==='number')?instance.elapsedSeconds:null,timer_started_at:instance.timerStartedAt||null};
+    // Upsert atômico (requer a UNIQUE task_instances_unique_day) — evita linhas duplicadas
+    // quando dois dispositivos sincronizam a mesma tarefa/dia ao mesmo tempo.
+    const {data,error}=await supabaseClient.from('task_instances')
+      .upsert(payload,{onConflict:'family_id,child_id,task_id,date'})
+      .select('id').single();
+    if(error) throw error;
+    if(data?.id) instance.id=data.id;
+    setCloudStatus('connected','Supabase sincronizado');
+    return true;
+  }catch(e){
+    // Banco sem a constraint UNIQUE (schema antigo): cai no método select-then-insert/update.
+    if(/on conflict|constraint|unique|42P10/i.test(e.message||'')) return await _syncInstanceLegacy(instance, payload);
+    console.error('[Supabase] syncInstance',e);
+    setCloudStatus('error','Erro ao sincronizar: '+e.message);
+    toast('⚠️ Falha ao sincronizar com Supabase','error');
+    return false;
+  }
+}
+async function _syncInstanceLegacy(instance, payload){
+  try{
     const {data:existing,error:selErr}=await supabaseClient.from('task_instances')
       .select('id')
-      .eq('family_id',state.familyId).eq('child_id',childId)
-      .eq('task_id',instance.taskId).eq('date',instance.date).limit(1);
+      .eq('family_id',payload.family_id).eq('child_id',payload.child_id)
+      .eq('task_id',payload.task_id).eq('date',payload.date).limit(1);
     if(selErr) throw selErr;
     if(existing && existing.length){
       const {error:upErr}=await supabaseClient.from('task_instances')
@@ -1402,7 +1452,7 @@ async function syncInstanceToSupabase(instance){
     setCloudStatus('connected','Supabase sincronizado');
     return true;
   }catch(e){
-    console.error('[Supabase] syncInstance',e);
+    console.error('[Supabase] syncInstance (legacy)',e);
     setCloudStatus('error','Erro ao sincronizar: '+e.message);
     toast('⚠️ Falha ao sincronizar com Supabase','error');
     return false;
@@ -1478,7 +1528,7 @@ async function deleteGoalFromSupabase(goal){
   return !error;
 }
 
-async function createFamilyOnly(){if(!supabaseClient) return toast('Configure o Supabase','error'); const name=$('#familyNameInput').value.trim(); if(!name) return toast('Digite o nome da família','error');
+async function createFamilyOnly(){if(!supabaseClient) return toast('Configure o Supabase','error'); const name=$('#familyNameInput').value.trim(); if(!name) return toast('Digite o nome da Família/Responsável','error');
   const {data,error}=await supabaseClient.from('families').insert({name}).select().single(); if(error) throw error; state.familyId=data.id; state.familyName=data.name; saveState();}
 async function createChildOnly(){if(!supabaseClient) return toast('Configure o Supabase','error'); if(!state.familyId) return toast('Crie/Busque família','error'); const name=$('#childNameInput').value.trim(); if(!name) return toast('Digite o nome da criança','error');
   const {data,error}=await supabaseClient.from('children').insert({family_id:state.familyId,name}).select().single(); if(error) throw error; state.childId=data.id; saveState(); await loadChildrenFromSupabase();}
@@ -1861,10 +1911,11 @@ function renderChildrenList(){
 
   // Banner Família/Responsável — topo da hierarquia
   if(hasFamily){
+    const collapsed=!!state.familyCollapsed;
     const banner=document.createElement('div'); banner.className='family-banner';
     const fico=document.createElement('div'); fico.className='fb-ico'; fico.textContent='👨‍👩‍👧';
-    banner.appendChild(fico);
     if(_familyEditing){
+      banner.appendChild(fico);
       const wrap=document.createElement('div'); wrap.style.cssText='display:flex;gap:6px;align-items:center;flex:1;min-width:0';
       const inp=document.createElement('input'); inp.className='input'; inp.value=state.familyName||''; inp.maxLength=60;
       inp.style.cssText='height:34px;flex:1;min-width:0;color:var(--ink);font-size:14px';
@@ -1876,14 +1927,30 @@ function renderChildrenList(){
       wrap.append(inp,ok,cancel); banner.appendChild(wrap);
       setTimeout(()=>{ inp.focus(); inp.select(); },0);
     } else {
+      const n=list.length;
+      const header=document.createElement('div'); header.style.cssText='display:flex;align-items:center;gap:12px;flex:1;min-width:0';
+      header.appendChild(fico);
       const fmid=document.createElement('div'); fmid.style.minWidth='0';
       const ftitle=document.createElement('p'); ftitle.className='fb-title'; ftitle.textContent=state.familyName||'Família/Responsável';
       const fsub=document.createElement('div'); fsub.className='fb-sub';
-      const n=list.length;
       fsub.textContent='Responsável · '+(n?(n+' criança'+(n>1?'s':'')+' vinculada'+(n>1?'s':'')):'nenhuma criança vinculada');
-      fmid.append(ftitle,fsub); banner.appendChild(fmid);
+      fmid.append(ftitle,fsub); header.appendChild(fmid);
+      if(n>0){
+        const chev=document.createElement('span'); chev.className='fb-chevron'; chev.setAttribute('aria-hidden','true'); chev.textContent=collapsed?'▸':'▾';
+        header.appendChild(chev);
+        header.style.cursor='pointer';
+        header.setAttribute('role','button');
+        header.setAttribute('tabindex','0');
+        header.setAttribute('aria-expanded', String(!collapsed));
+        header.setAttribute('aria-label', (collapsed?'Mostrar':'Ocultar')+' crianças vinculadas');
+        header.title=collapsed?'Mostrar crianças':'Ocultar crianças';
+        const _toggle=()=>{ state.familyCollapsed=!collapsed; saveState(); renderChildrenList(); };
+        header.addEventListener('click',_toggle);
+        header.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); _toggle(); } });
+      }
+      banner.appendChild(header);
       const fedit=document.createElement('button'); fedit.className='fb-edit'; fedit.type='button'; fedit.title='Renomear Família/Responsável'; fedit.textContent='✏️';
-      fedit.addEventListener('click',()=>{ _familyEditing=true; renderChildrenList(); });
+      fedit.addEventListener('click',(e)=>{ e.stopPropagation(); _familyEditing=true; renderChildrenList(); });
       banner.appendChild(fedit);
     }
     el.appendChild(banner);
@@ -1894,6 +1961,7 @@ function renderChildrenList(){
 
   // Crianças vinculadas — aninhadas sob a família (barra lateral indica o vínculo)
   const nest=document.createElement('div'); nest.className='children-nest';
+  if(state.familyCollapsed && list.length>0) nest.style.display='none';
   list.forEach(child=>{
     const item=document.createElement('div'); item.className='task'; item.dataset.tint='lav';
     const ico=avatarEl(child.avatarData,'👧'); ico.style.cssText='width:56px;height:56px;cursor:pointer;flex:none'; ico.title='Clique para alterar foto';
@@ -2061,7 +2129,7 @@ function setParentTab(tab){
   const weekActions=$('#panelWeekActions');
   if(weekActions) weekActions.classList.toggle('hidden', tab!=='week');
   $all('[data-tab]').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
-  if(tab==='history') renderHistory();
+  if(tab==='history'){ renderHistory(); if(supabaseClient&&state.familyId) loadAllChildrenWeekInstances().then(()=>renderHistory()).catch(()=>{}); }
 }
 
 // ── Manutenção ──
@@ -2075,6 +2143,7 @@ async function forceSyncAll(){
     await loadTaskInstancesFromSupabase();
     await loadGoalsFromSupabase();
     await loadWeekHistoryFromSupabase();
+    await loadAllChildrenWeekInstances();
     ensureInstancesForToday();
     renderAll();
     toast('Sincronização concluída ✅','ok');
@@ -2150,20 +2219,6 @@ function updateHistoryBadge(){
   const badge=$('#historyBadge'); if(!badge) return;
   badge.style.display=pending?'inline-flex':'none';
   badge.textContent=pending;
-}
-
-async function markHistoryPaid(histId){
-  const entry=(state.weekHistory||[]).find(h=>h.id===histId); if(!entry) return;
-  if(!confirm(`Marcar semana de ${entry.childName} (${fmtWeekLabel(entry.weekStart,entry.weekEnd)}) como paga?`)) return;
-  entry.paid=true; entry.paidAt=new Date().toISOString(); saveState();
-  if(supabaseClient&&state.familyId){
-    try{
-      await supabaseClient.from('weekly_payments').update({paid_at:entry.paidAt})
-        .eq('family_id',state.familyId).eq('child_id',entry.childId)
-        .eq('week_start_date',entry.weekStart);
-    }catch(e){ console.error('[History] markPaid',e); }
-  }
-  updateHistoryBadge(); renderHistory(); renderAll();
 }
 
 function renderHistory(){
@@ -2566,12 +2621,12 @@ async function executePayment(){
   }catch(e){ toast('Erro: '+e.message,'error'); }
 }
 
-async function copyPayPixCode(){
-  const btn=$('#payCopyPixBtn');
-  try{ await navigator.clipboard.writeText(_payPixCode); }
-  catch(e){ const t=document.createElement('textarea'); t.value=_payPixCode; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); }
-  btn.textContent='✅ Copiado!'; setTimeout(()=>btn.textContent='Copiar código PIX',2000);
+async function copyTextToClipboard(text){
+  try{ await navigator.clipboard.writeText(text); }
+  catch(e){ const t=document.createElement('textarea'); t.value=text; document.body.appendChild(t); t.select(); try{ document.execCommand('copy'); }catch(_){} document.body.removeChild(t); }
 }
+function flashCopied(btn){ if(!btn) return; btn.textContent='✅ Copiado!'; setTimeout(()=>btn.textContent='Copiar código PIX',2000); }
+async function copyPayPixCode(){ await copyTextToClipboard(_payPixCode); flashCopied($('#payCopyPixBtn')); }
 
 async function _markHistoryPaidDirect(histId){
   const entry=(state.weekHistory||[]).find(h=>h.id===histId); if(!entry) return;
@@ -2623,7 +2678,8 @@ async function importBackup(file){
     const data=JSON.parse(text);
     if(!data||typeof data!=='object') throw new Error('Arquivo inválido');
     const fields=['tasks','instances','goals','weekHistory','goalsHistory','taskOrder','familyId','familyName','childId','childrenList','pointValueBRL','showMoneyToChild','parentPin','parentPinEnabled','lastWeekStart','totalGoalStars'];
-    fields.forEach(k=>{ if(data[k]!==undefined) state[k]=data[k]; });
+    const arrayFields=new Set(['tasks','instances','goals','weekHistory','goalsHistory','taskOrder','childrenList']);
+    fields.forEach(k=>{ if(data[k]===undefined) return; if(arrayFields.has(k) && !Array.isArray(data[k])) return; state[k]=data[k]; });
     saveState(); ensureInstancesForToday(); renderAll();
     toast('Backup importado ✅','ok');
   }catch(e){ toast('Erro ao importar: '+e.message,'error'); }
@@ -2666,11 +2722,7 @@ function openPixModal(){
   img.onerror=function(){ this.src=qr2; this.onerror=function(){ this.style.display='none'; $('#pixQrFallback').style.display='block'; }; };
 }
 function closePixModal(){ $('#pixOverlay').classList.remove('open'); }
-async function copyPixCode(){
-  const btn=$('#pixCopyBtn');
-  try{ await navigator.clipboard.writeText(_pixCode); btn.textContent='✅ Copiado!'; setTimeout(()=>btn.textContent='Copiar código PIX',2000); }
-  catch(e){ const tmp=document.createElement('textarea'); tmp.value=_pixCode; document.body.appendChild(tmp); tmp.select(); document.execCommand('copy'); document.body.removeChild(tmp); btn.textContent='✅ Copiado!'; setTimeout(()=>btn.textContent='Copiar código PIX',2000); }
-}
+async function copyPixCode(){ await copyTextToClipboard(_pixCode); flashCopied($('#pixCopyBtn')); }
 
 let localReviews=(()=>{ try{ return JSON.parse(localStorage.getItem('ktm_reviews')||'[]'); }catch(e){ return []; }})();
 let sharedReviews=[];
@@ -2881,7 +2933,7 @@ function bindEvents(){
         } else if(data?.id){
           task.id=data.id;
         }
-      }catch(err){}
+      }catch(err){ console.error('[Supabase] add task',err); toast('Tarefa salva só neste dispositivo (sync falhou)','error'); }
     }
     state.tasks.push(task); saveState(); ensureInstancesForToday(); e.target.reset();
     toggleDaysRow('daily','#fDaysRow','fDayPicker');
@@ -3117,9 +3169,9 @@ function init(){
   // Versão automática via CHANGELOG.md
   (async()=>{
     const el=document.getElementById('appVersion'); if(!el) return;
-    const CACHE_KEY='kidstasks_app_version', CACHE_TTL=6*60*60*1000;
+    const CACHE_KEY='kidstasks_app_version';
     const cached=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
-    if(cached && Date.now()-cached.ts<CACHE_TTL){ el.textContent='© MGC · '+cached.v; return; }
+    if(cached && cached.v) el.textContent='© MGC · '+cached.v;  // mostra na hora; revalida abaixo
     try{
       const res=await fetch('./CHANGELOG.md?_='+Date.now(),{cache:'no-cache'});
       if(!res.ok) return;
@@ -3133,7 +3185,7 @@ function init(){
   // Banner de nova versão via Supabase app_config
   (async()=>{
     if(!revClient) return;
-    const LOCAL_VERSION='2.3.0';
+    const LOCAL_VERSION='2.3.2';
     const CACHE_KEY='kidstasks_update_check', CACHE_TTL=24*60*60*1000;
     const cached=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
     if(cached && Date.now()-cached.ts<CACHE_TTL) return;
