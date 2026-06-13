@@ -271,10 +271,18 @@ ALTER TABLE public.children        ADD COLUMN IF NOT EXISTS avatar_data text;
 ALTER TABLE public.weekly_payments ADD COLUMN IF NOT EXISTS goal_stars  integer NOT NULL DEFAULT 0;
 ALTER TABLE public.weekly_payments ADD COLUMN IF NOT EXISTS money_stars integer NOT NULL DEFAULT 0;
 
--- Remove instâncias duplicadas (mantém a de maior id) antes de criar a UNIQUE:
+-- Remove instâncias duplicadas mantendo a "melhor" (aprovada > marcada > recusada > pendente)
+-- antes de criar a UNIQUE. O id é UUID aleatório, então não dá pra confiar em "maior id".
 DELETE FROM public.task_instances a USING public.task_instances b
-  WHERE a.id < b.id AND a.family_id = b.family_id AND a.child_id = b.child_id
-    AND a.task_id = b.task_id AND a.date = b.date;
+  WHERE a.family_id = b.family_id AND a.child_id = b.child_id
+    AND a.task_id = b.task_id AND a.date = b.date AND a.id <> b.id
+    AND (
+          CASE b.status WHEN 'approved' THEN 3 WHEN 'child_marked' THEN 2 WHEN 'rejected' THEN 1 ELSE 0 END,
+          COALESCE(b.approved_stars, 0), b.id
+        ) > (
+          CASE a.status WHEN 'approved' THEN 3 WHEN 'child_marked' THEN 2 WHEN 'rejected' THEN 1 ELSE 0 END,
+          COALESCE(a.approved_stars, 0), a.id
+        );
 
 ALTER TABLE public.task_instances
   ADD CONSTRAINT task_instances_unique_day UNIQUE (family_id, child_id, task_id, date);
