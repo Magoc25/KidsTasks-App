@@ -8,10 +8,30 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 > Não representa, não é financiado e não tem vínculo institucional com o IFMA
 > ou qualquer outra organização.
 
-[![Versão](https://img.shields.io/badge/versão-2.1.0-blue)](#changelog)
-[![Licença](https://img.shields.io/badge/licença-não%20comercial-orange)](#licença)
-[![PIX](https://img.shields.io/badge/apoie-PIX-brightgreen)](#apoiar)
+[![Versão](https://img.shields.io/badge/versão-2.3.0-blue)](#-licença-e-termos-de-uso)
+[![Licença](https://img.shields.io/badge/licença-não%20comercial-orange)](#-licença-e-termos-de-uso)
+[![PIX](https://img.shields.io/badge/apoie-PIX-brightgreen)](#-apoiar-o-projeto)
 [![Dispositivos ativos](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/Magoc25/KidsTasks-App/master/stats.json&query=$.active_30d&label=dispositivos%20ativos%20(30d)&color=blue&suffix=%20dispositivos)](./stats.json)
+
+---
+
+## ▶ Abrir agora — sem baixar nada
+
+O app já está publicado online. Clique e use:
+
+**[▶ Abrir o KidsTasks](https://magoc25.github.io/KidsTasks-App/KidsTasks.html)**
+
+Funciona em qualquer navegador moderno (Chrome, Edge, Firefox, Safari) — no celular, tablet ou computador. **Não precisa de cadastro, login, conta GitHub ou download de arquivos.** Após o primeiro acesso, o app funciona **offline**. Seus dados ficam **somente no seu dispositivo** (no armazenamento do próprio navegador).
+
+### 📱 Instalar como app no seu dispositivo
+
+Depois de abrir a URL acima, você pode instalar como aplicativo nativo, com ícone na tela inicial / área de trabalho:
+
+| Plataforma | Como instalar |
+|---|---|
+| **Chrome / Edge no PC** | Clique no ícone de instalação (☐ com seta) na barra de endereços → Instalar |
+| **Android (Chrome)** | Menu (⋮) → "Instalar app" ou "Adicionar à tela inicial" |
+| **iPhone / iPad (Safari)** | Compartilhar (□↑) → "Adicionar à Tela de Início" |
 
 ---
 
@@ -23,6 +43,10 @@ Se você está avaliando este app, provavelmente já viu opções na Play Store 
 - **Sem propagandas** — apps "gratuitos" nas lojas se sustentam exibindo anúncios. O KidsTasks não exibe nenhum.
 - **Sem prazo de expiração** — muitos apps oferecem um período de teste e depois bloqueiam funcionalidades ou cobram assinatura. O KidsTasks é gratuito para sempre, sem limitações.
 - **Funciona sem internet** — abre e funciona normalmente mesmo sem conexão. Sincroniza quando a internet voltar, se você quiser.
+- **Várias crianças, dados separados** — cada criança tem suas próprias tarefas, metas e progresso, de forma independente. Muitos apps gratuitos tratam tudo num monte só.
+- **Mesada de verdade, não só pontinhos** — converte ⭐ em R$ pelo valor que *você* define, calcula a recompensa da semana e gera até o QR Code PIX por criança. A maioria dos apps de tarefas para na "estrelinha".
+- **Controle do responsável** — a aprovação é tarefa por tarefa (de 1 a 5 ⭐) e fica protegida por PIN.
+- **Dados de crianças sob seu controle** — informações de menores ficam no seu dispositivo ou no seu próprio Supabase (relevante diante da LGPD e do ECA Digital), nunca num servidor do desenvolvedor.
 
 O único "custo" honesto: a instalação é um pouco mais manual do que clicar em "Instalar" na loja — mas você faz uma única vez e leva menos de 5 minutos.
 
@@ -32,14 +56,11 @@ O único "custo" honesto: a instalação é um pouco mais manual do que clicar e
 
 Se você veio aqui só para **usar o app**, pode ignorar a grande maioria dos arquivos deste repositório — eles são documentação técnica e configuração voltadas para desenvolvedores.
 
-Para você, o que importa é simples:
+Para você, basta clicar na URL pública da seção [▶ Abrir agora](#-abrir-agora--sem-baixar-nada). Tudo o que importa é:
 
-| Cenário | O que você precisa |
+| Arquivo principal | URL para usar |
 |---|---|
-| **Usar no computador** (sem nuvem) | Baixar apenas `KidsTasks.html` e abrir no navegador |
-| **Acessar por URL em qualquer dispositivo** | Criar uma conta no GitHub, fazer upload dos arquivos deste repositório uma única vez — depois acessa de qualquer lugar pela URL, sem guardar nada no computador |
-
-👉 Vá direto para [**Como usar**](#-como-usar) para o passo a passo do seu cenário.
+| `KidsTasks.html` | [magoc25.github.io/KidsTasks-App/KidsTasks.html](https://magoc25.github.io/KidsTasks-App/KidsTasks.html) |
 
 ---
 
@@ -57,12 +78,15 @@ Suporta múltiplas crianças por família, cada uma com suas próprias tarefas, 
 
 - **Modo Criança** — visualiza tarefas do dia, marca como concluídas e acompanha metas
 - **Modo Responsável** — aprova tarefas com 1–5 ⭐, protegido por PIN
-- **Aprovação com estrelas** — de 1 a 5 ⭐ por tarefa aprovada
+- **Família/Responsável e Crianças** — painel com a família/responsável no topo e as crianças vinculadas logo abaixo, em hierarquia
+- **Aprovação com estrelas** — de 1 a 5 ⭐ por tarefa aprovada, com botão "Aprovar todas"
 - **Multi-criança** — tarefas, metas e progresso separados por criança
 - **Metas e recompensas** — acumule ⭐ para conquistar presentes e recompensas
 - **Conversão ⭐ → R$** — configure quanto vale cada estrela em dinheiro
 - **Tipo de tarefa** — 💰 Dinheiro (converte em R$) ou 🏆 Meta (acumula para conquistas)
-- **Recompensa semanal** — calcula R$ acumulado e registra o pagamento
+- **Recompensa semanal** — calcula R$ acumulado e registra o pagamento (com QR Code PIX por criança)
+- **Período semanal configurável** — Dom–Sáb, Seg–Dom ou Seg–Sex
+- **Mensagens motivacionais** — ao concluir uma tarefa, a criança recebe um incentivo animado
 - **Offline-first** — funciona sem internet; sincroniza quando conectado
 - **Supabase opcional** — sincronização entre dispositivos com seu próprio banco
 - **PWA instalável** — instale como app no Android, iOS, Windows e macOS
@@ -71,37 +95,35 @@ Suporta múltiplas crianças por família, cada uma com suas próprias tarefas, 
 
 ## 📦 Como usar
 
-### Cenário 1 — Uso local simples _(sem nuvem)_
+### Opção 1 — Online _(recomendado)_
 
-1. Baixe o arquivo `KidsTasks.html` para o seu computador
-2. Abra no Chrome, Edge ou Safari
-3. Pronto — os dados ficam salvos no próprio navegador
+Use a URL pública da seção [▶ Abrir agora](#-abrir-agora--sem-baixar-nada). É a forma mais simples — sem instalação, sem cadastro, sem download. Funciona em qualquer dispositivo com navegador.
 
-> **Backup:** os dados ficam no navegador. Se limpar o histórico/cache, os dados somem.
-> Exporte periodicamente ou use o Cenário 2 para maior segurança.
+Seus dados ficam salvos **no próprio navegador**, apenas no seu dispositivo. Para fazer backup ou levar para outro computador, use o card **💾 Backup** dentro do app (exporta/importa um arquivo `.json`).
 
----
+> **Atenção:** se limpar o histórico/cache do navegador, os dados locais somem. Faça backup periódico ou use a **Opção 3** (sincronização) para maior segurança.
 
-### Cenário 2 — Dois ou mais dispositivos com sincronização _(Supabase)_
+### Opção 2 — Cópia local _(opcional)_
 
-1. Crie conta no Supabase (gratuito) — veja [Configurar Supabase](#-configurar-supabase)
-2. Em cada dispositivo, abra o app, acesse ☁️ e configure as chaves
-3. Os dados sincronizam automaticamente entre os dispositivos
+Como o app é um **HTML single-file** (estilos e scripts embutidos), **você não precisa baixar a pasta inteira nem o ZIP**: basta o próprio arquivo principal.
 
----
+- Abra a URL pública e use **Ctrl+S** (salvar página); ou, no repositório, abra `KidsTasks.html` → **Download raw file** (ícone ⬇). Depois é só dar duplo clique no arquivo.
 
-### Cenário 3 — Acesso de qualquer lugar pela URL _(GitHub Pages + Supabase)_
+Funciona offline, igual à versão online.
 
-1. Configure o Supabase (Cenário 2)
-2. Publique o app no GitHub Pages — veja [Publicar no GitHub Pages](#-publicar-no-github-pages)
-3. Acesse a URL gerada em qualquer dispositivo e configure o Supabase uma vez
+> ⚠️ A **instalação como PWA** (ícone na tela, cache offline automático) usa a versão publicada — por isso a **Opção 1** é a recomendada. Um arquivo solto roda do disco, mas não se instala como aplicativo.
+
+### Opção 3 — Sincronizar entre dois ou mais dispositivos _(opcional)_
+
+Se quiser que os dados apareçam no PC **e** no celular automaticamente, configure uma conta gratuita no Supabase — veja [Configurar Supabase](#-configurar-supabase). É opcional: o app funciona perfeitamente sem isso.
 
 ---
 
 ## 🔧 Configurar Supabase
 
-> O Supabase é gratuito para uso pessoal. Cada família usa **seu próprio projeto Supabase** —
-> os dados ficam isolados e ninguém além da família tem acesso.
+> _Opcional — só para sincronizar entre dispositivos._ O Supabase é gratuito para uso pessoal.
+> Cada família usa **seu próprio projeto Supabase** — os dados ficam isolados e ninguém além
+> da família tem acesso.
 
 ### Passo 1 — Criar conta e projeto
 
@@ -232,7 +254,7 @@ CREATE POLICY "weekly_payments_anon" ON public.weekly_payments FOR ALL TO anon U
 CREATE POLICY "goals_anon"           ON public.goals           FOR ALL TO anon USING (true) WITH CHECK (true);
 ```
 
-5. Execute cada bloco separadamente. Ao final, vá em **Table Editor** e confirme que as **6 tabelas** aparecem: `families`, `children`, `tasks`, `task_instances`, `weekly_payments`, `goals`.
+Execute cada bloco separadamente. Ao final, vá em **Table Editor** e confirme que as **6 tabelas** aparecem: `families`, `children`, `tasks`, `task_instances`, `weekly_payments`, `goals`.
 
 ---
 
@@ -306,86 +328,15 @@ Deve aparecer uma linha com `jobname = kidstasks-keep-alive`. Pronto — funcion
 
 ---
 
-### Passo 5 — Criar família e criança
+### Passo 5 — Criar Família/Responsável e criança
 
 1. No app, alterne para o modo **Responsável** (botão no topo)
-2. Vá em **Configurações → Família e crianças**
-3. Digite o nome da família e clique em **Criar família**
-4. Digite o nome da criança e clique em **Adicionar criança**
-5. Clique em **Atualizar lista** — a criança deve aparecer
+2. Vá em **Configurações → Família/Responsável e Crianças**
+3. Digite o nome da Família/Responsável e clique em **Criar Família/Responsável** — ela aparece no topo, como um banner
+4. Digite o nome da criança e clique em **Adicionar criança** — ela aparece vinculada, logo abaixo
+5. Clique em **Atualizar lista** se precisar recarregar
 
 A partir daí, cadastre as tarefas na aba **Tarefas** e use o app normalmente.
-
----
-
-## 🌐 Publicar no GitHub Pages
-
-> O GitHub Pages permite acessar o app por uma URL fixa de qualquer dispositivo, de graça.
-> Siga os passos abaixo mesmo que nunca tenha usado o GitHub antes.
-
-### Passo 1 — Criar conta no GitHub
-
-1. Acesse [github.com](https://github.com) e clique em **Sign up**
-2. Escolha um nome de usuário, e-mail e senha
-3. Confirme o e-mail recebido
-
----
-
-### Passo 2 — Criar um repositório
-
-1. Após fazer login, clique no **+** (canto superior direito) → **New repository**
-2. Preencha:
-   - **Repository name:** `KidsTasks-App`
-   - **Visibility:** ✅ Public _(obrigatório para GitHub Pages gratuito)_
-   - **Deixe as demais opções desmarcadas**
-3. Clique em **Create repository**
-
----
-
-### Passo 3 — Enviar os arquivos
-
-1. Na página do repositório recém-criado, clique em **uploading an existing file**
-2. Arraste ou selecione os arquivos do KidsTasks:
-   - `KidsTasks.html`
-   - `sw.js`
-   - `manifest.json`
-   - `icon-192.png`
-   - `icon-512.png`
-   - `.nojekyll` _(arquivo oculto — pode precisar ativar "mostrar arquivos ocultos" no seu sistema)_
-3. No campo **Commit changes**, deixe a mensagem padrão ou escreva `primeiro envio`
-4. Clique em **Commit changes**
-
----
-
-### Passo 4 — Ativar o GitHub Pages
-
-1. No repositório, clique em **Settings** (engrenagem no menu superior)
-2. No menu lateral, clique em **Pages**
-3. Em **Source**, selecione **Deploy from a branch**
-4. Em **Branch**, selecione **main** e a pasta **/ (root)**
-5. Clique em **Save**
-6. Aguarde ~2 minutos e recarregue a página — a URL do app aparecerá em destaque
-
----
-
-### Passo 5 — Acessar o app
-
-A URL do app terá o formato:
-```
-https://seu-usuario.github.io/KidsTasks-App/KidsTasks.html
-```
-
-> ⚠️ A URL sem o nome do arquivo (`/KidsTasks-App/`) retorna erro 404 — sempre use a URL completa com `KidsTasks.html` no final.
-
-Cole essa URL no navegador de qualquer dispositivo para acessar o app. Para instalar como aplicativo, veja a seção abaixo.
-
----
-
-## 📱 Instalar como app no celular
-
-**Android (Chrome):** Menu (⋮) → Adicionar à tela inicial → Confirmar
-
-**iPhone/iPad (Safari):** Compartilhar → Adicionar à tela de início
 
 ---
 
@@ -393,7 +344,7 @@ Cole essa URL no navegador de qualquer dispositivo para acessar o app. Para inst
 
 O projeto é gratuito e possui **código-fonte disponível**. Se foi útil, considere apoiar:
 
-Clique em **☕ Apoiar** no rodapé do app para contribuir via PIX.
+Clique em **💖 Apoiar (PIX)** no rodapé do app para contribuir via PIX.
 
 **Chave PIX:** `4c6086a2-4bb8-474b-a4cf-ced8c8d82189` · MGC Dev
 
@@ -424,6 +375,7 @@ Consulte os arquivos:
 - [LICENSE.md](./LICENSE.md)
 - [TERMS.md](./TERMS.md)
 - [CHANGELOG.md](./CHANGELOG.md)
+- [PRIVACY.md](./PRIVACY.md) · [SECURITY.md](./SECURITY.md) · [ACCESSIBILITY.md](./ACCESSIBILITY.md)
 
 ---
 

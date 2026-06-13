@@ -5,6 +5,27 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [2.3.0] — Junho 2026
+
+### 🆕 Adicionado
+
+- **Painel "Família/Responsável e Crianças" com hierarquia** — a Família/Responsável agora aparece como um **banner no topo** e as crianças ficam **aninhadas logo abaixo**, com uma barra lateral indicando o vínculo. Renomear a Família/Responsável direto no banner (botão ✏️, edição inline). O botão de criação foi renomeado para **"Criar Família/Responsável"**.
+- **Botão GitHub no rodapé do app** — abre o repositório em nova aba. Ordem padronizada do rodapé: GitHub → Apoiar → Avaliações.
+
+### 🐛 Correções
+
+- **Família/Responsável não aparecia no painel de Configurações** — só as crianças eram listadas; o nome da família ficava apenas no campo de texto e no cabeçalho. Agora a Família/Responsável tem um elemento visual próprio (banner) acima das crianças.
+
+### 🔧 Melhorias
+
+- **Service Worker `network-first` para o HTML** — o app passa a carregar **sempre a versão publicada** quando online, caindo no cache só offline. Evita ficar preso numa versão antiga após uma atualização. Ícones, `manifest.json` e `favicon.svg` seguem `cache-first`. `CACHE_NAME` → `kidstasks-v57`.
+
+### 📄 Documentação
+
+- **README reescrito no padrão MGC Dev** — nova seção **"▶ Abrir agora"** com a URL pública em destaque e a instalação como PWA mesclada; **"Como usar"** reorganizado em Opção 1 (online) / 2 (cópia local) / 3 (sincronização); seção **"O que são os arquivos?"** corrigida (sem instruções de publicação no GitHub, que são tarefa do desenvolvedor); badge de versão atualizado.
+
+---
+
 ## [2.2.0] — Maio 2026
 
 ### 🆕 Adicionado

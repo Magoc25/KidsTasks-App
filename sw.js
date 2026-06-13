@@ -1,6 +1,6 @@
-/* KidsTasks — Service Worker v1.0.0 */
+/* KidsTasks — Service Worker (cache kidstasks-v57) */
 
-const CACHE_NAME = 'kidstasks-v56';
+const CACHE_NAME = 'kidstasks-v57';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
@@ -18,14 +18,27 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   if (!event.request.url.startsWith(self.location.origin)) return;
 
+  const url = event.request.url;
+  const isHTML = event.request.mode === 'navigate' || url.includes('KidsTasks.html');
+
+  // App (HTML/navegação): network-first — sempre pega a versão nova quando online
+  // e cai no cache só se estiver offline. Evita o app ficar preso numa versão antiga.
+  if (isHTML) {
+    event.respondWith(
+      fetch(event.request).then(response => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        return response;
+      }).catch(() => caches.match(event.request).then(c => c || new Response('Offline', { status: 503 })))
+    );
+    return;
+  }
+
+  // Demais recursos do mesmo origin (manifest, ícones, favicon): cache-first.
   event.respondWith(
     caches.match(event.request).then(cached => {
       return cached || fetch(event.request).then(response => {
-        if (event.request.url.includes('KidsTasks.html') ||
-            event.request.url.includes('KidsTasks.html') ||
-            event.request.url.includes('manifest.json') ||
-            event.request.url.includes('icon-') ||
-            event.request.url.includes('favicon.svg')) {
+        if (url.includes('manifest.json') || url.includes('icon-') || url.includes('favicon.svg')) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }
