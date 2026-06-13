@@ -8,7 +8,7 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 > Não representa, não é financiado e não tem vínculo institucional com o IFMA
 > ou qualquer outra organização.
 
-[![Versão](https://img.shields.io/badge/versão-2.3.2-blue)](#-licença-e-termos-de-uso)
+[![Versão](https://img.shields.io/badge/versão-2.4.0-blue)](#-licença-e-termos-de-uso)
 [![Licença](https://img.shields.io/badge/licença-não%20comercial-orange)](#-licença-e-termos-de-uso)
 [![PIX](https://img.shields.io/badge/apoie-PIX-brightgreen)](#-apoiar-o-projeto)
 [![Dispositivos ativos](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/Magoc25/KidsTasks-App/master/stats.json&query=$.active_30d&label=dispositivos%20ativos%20(30d)&color=blue&suffix=%20dispositivos)](./stats.json)
@@ -32,6 +32,16 @@ Depois de abrir a URL acima, você pode instalar como aplicativo nativo, com íc
 | **Chrome / Edge no PC** | Clique no ícone de instalação (☐ com seta) na barra de endereços → Instalar |
 | **Android (Chrome)** | Menu (⋮) → "Instalar app" ou "Adicionar à tela inicial" |
 | **iPhone / iPad (Safari)** | Compartilhar (□↑) → "Adicionar à Tela de Início" |
+
+### 🚀 Primeiros passos (1ª vez)
+
+1. Abra o app e toque em **🔒 Responsável** (PIN padrão: **`1234`** — troque depois em Configurações).
+2. Vá em **Configurações → Família/Responsável e Crianças**.
+3. Crie a **Família/Responsável** e **adicione as crianças**.
+4. Na aba **Tarefas**, cadastre as tarefas de cada criança.
+5. Pronto! No modo **👦 Criança**, ela marca as tarefas; no modo Responsável, você aprova com ⭐.
+
+> Tudo isso funciona **offline, só no seu dispositivo** — não precisa de conta nem internet. Para usar a mesma família em **mais de um dispositivo**, configure a sincronização opcional (veja [Configurar Supabase](#-configurar-supabase)).
 
 ---
 
@@ -71,6 +81,8 @@ O **KidsTasks** é um Progressive Web App (PWA) para famílias que querem organi
 O app funciona no modo **Criança** (marca tarefas e acompanha metas) e modo **Responsável** (aprova tarefas com 1–5 ⭐, gerencia crianças, metas e pagamentos). Tudo funciona offline e pode ser sincronizado opcionalmente com o Supabase para uso em múltiplos dispositivos.
 
 Suporta múltiplas crianças por família, cada uma com suas próprias tarefas, metas e progresso independentes.
+
+> 👨‍👩‍👧 **Um app = uma Família/Responsável (com várias crianças).** O KidsTasks foi pensado para **um único responsável** gerenciando **quantas crianças quiser** — não há suporte a vários responsáveis/famílias separados no mesmo app. Para um **segundo responsável** (outra casa), use **outro dispositivo**; e, se for sincronizar, uma **conta Supabase separada** — nunca a mesma URL/chave de outra família.
 
 ---
 

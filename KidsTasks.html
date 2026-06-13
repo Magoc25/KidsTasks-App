@@ -441,14 +441,12 @@
               <div style="margin-bottom:12px">
                 <div id="childrenList" style="display:flex;flex-direction:column;gap:10px"></div>
               </div>
-              <p style="margin:0 0 10px;color:var(--slate);font-size:13px;line-height:1.5">Crie ou busque a Família/Responsável e vincule as crianças abaixo.</p>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <p style="margin:0 0 10px;color:var(--slate);font-size:13px;line-height:1.5">Crie ou busque a Família/Responsável. O botão de adicionar crianças (➕) aparece no banner dela, acima.</p>
+              <div style="display:grid;grid-template-columns:1fr;gap:8px">
                 <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Nome da Família/Responsável<input class="input" id="familyNameInput" placeholder="Ex: Família Silva"/></label>
-                <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Nome da criança<input class="input" id="childNameInput" placeholder="Ex: Alice"/></label>
               </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
                 <button class="btn btn-primary" id="familyCreateBtn" type="button">Criar Família/Responsável</button>
-                <button class="btn btn-secondary" id="childCreateBtn" type="button">Adicionar criança</button>
                 <button class="btn btn-primary" id="loadFamilyBtn" type="button">🔍 Buscar família</button>
                 <button class="btn btn-secondary" id="refreshChildrenBtn" type="button">Atualizar lista</button>
               </div>
@@ -1528,10 +1526,32 @@ async function deleteGoalFromSupabase(goal){
   return !error;
 }
 
-async function createFamilyOnly(){if(!supabaseClient) return toast('Configure o Supabase','error'); const name=$('#familyNameInput').value.trim(); if(!name) return toast('Digite o nome da Família/Responsável','error');
-  const {data,error}=await supabaseClient.from('families').insert({name}).select().single(); if(error) throw error; state.familyId=data.id; state.familyName=data.name; saveState();}
-async function createChildOnly(){if(!supabaseClient) return toast('Configure o Supabase','error'); if(!state.familyId) return toast('Crie/Busque família','error'); const name=$('#childNameInput').value.trim(); if(!name) return toast('Digite o nome da criança','error');
-  const {data,error}=await supabaseClient.from('children').insert({family_id:state.familyId,name}).select().single(); if(error) throw error; state.childId=data.id; saveState(); await loadChildrenFromSupabase();}
+async function createFamilyOnly(){
+  const name=$('#familyNameInput').value.trim(); if(!name) return toast('Digite o nome da Família/Responsável','error');
+  if(!supabaseClient){ // modo local (sem nuvem): grava só no dispositivo
+    if(!state.familyId) state.familyId='local';
+    state.familyName=name; saveState(); return;
+  }
+  const {data,error}=await supabaseClient.from('families').insert({name}).select().single(); if(error) throw error; state.familyId=data.id; state.familyName=data.name; saveState();
+}
+async function addChildByName(name){
+  name=String(name||'').trim();
+  if(!state.familyId) return toast('Crie a Família/Responsável primeiro','error');
+  if(!name) return toast('Digite o nome da criança','error');
+  if(!supabaseClient){ // modo local: adiciona a criança só no dispositivo
+    if(!Array.isArray(state.childrenList)) state.childrenList=[];
+    const id='c'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    state.childrenList.push({id,name,avatarData:null});
+    if(!state.childId) state.childId=id;
+    _addingChild=false; saveState(); ensureInstancesForToday(); renderAll(); toast('Criança adicionada','ok'); return;
+  }
+  try{
+    const {data,error}=await supabaseClient.from('children').insert({family_id:state.familyId,name}).select().single();
+    if(error) throw error;
+    state.childId=data.id; saveState(); await loadChildrenFromSupabase();
+    _addingChild=false; ensureInstancesForToday(); renderAll(); toast('Criança adicionada','ok');
+  }catch(e){ console.error('[addChild]',e); toast('Erro ao adicionar criança','error'); }
+}
 
 // Edição de tarefas (v4)
 function openEditTask(task){
@@ -1891,7 +1911,7 @@ function renderGoalsList(){
   }
 }
 
-let _familyEditing=false;
+let _familyEditing=false, _addingChild=false;
 async function renameFamily(newName){
   newName=String(newName||'').trim();
   if(!newName) return toast('Digite um nome','error');
@@ -1949,14 +1969,32 @@ function renderChildrenList(){
         header.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); _toggle(); } });
       }
       banner.appendChild(header);
-      const fedit=document.createElement('button'); fedit.className='fb-edit'; fedit.type='button'; fedit.title='Renomear Família/Responsável'; fedit.textContent='✏️';
-      fedit.addEventListener('click',(e)=>{ e.stopPropagation(); _familyEditing=true; renderChildrenList(); });
+      const fadd=document.createElement('button'); fadd.className='fb-edit'; fadd.type='button'; fadd.title='Adicionar criança'; fadd.textContent='➕'; fadd.style.marginLeft='0';
+      fadd.addEventListener('click',(e)=>{ e.stopPropagation(); _addingChild=true; _familyEditing=false; renderChildrenList(); });
+      banner.appendChild(fadd);
+      const fedit=document.createElement('button'); fedit.className='fb-edit'; fedit.type='button'; fedit.title='Renomear Família/Responsável'; fedit.textContent='✏️'; fedit.style.marginLeft='0';
+      fedit.addEventListener('click',(e)=>{ e.stopPropagation(); _familyEditing=true; _addingChild=false; renderChildrenList(); });
       banner.appendChild(fedit);
     }
     el.appendChild(banner);
   } else {
     const p=document.createElement('div'); p.style.cssText='color:var(--slate);font-size:14px';
     p.textContent='Crie a Família/Responsável abaixo para começar.'; el.appendChild(p);
+  }
+
+  // Linha inline de adicionar criança (aberta pelo ➕ do banner)
+  if(_addingChild && hasFamily){
+    const addRow=document.createElement('div');
+    addRow.style.cssText='display:flex;gap:6px;align-items:center;margin:2px 0 6px';
+    const inp=document.createElement('input'); inp.className='input'; inp.placeholder='Nome da criança (ex: Alice)'; inp.maxLength=40;
+    inp.style.cssText='height:38px;flex:1;min-width:0;font-size:14px';
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); addChildByName(inp.value); } else if(e.key==='Escape'){ _addingChild=false; renderChildrenList(); } });
+    const ok=document.createElement('button'); ok.className='btn btn-primary'; ok.type='button'; ok.textContent='Adicionar'; ok.style.cssText='height:38px;flex:none';
+    ok.addEventListener('click',()=>addChildByName(inp.value));
+    const cancel=document.createElement('button'); cancel.className='btn btn-secondary'; cancel.type='button'; cancel.textContent='✕'; cancel.title='Cancelar'; cancel.style.cssText='height:38px;flex:none';
+    cancel.addEventListener('click',()=>{ _addingChild=false; renderChildrenList(); });
+    addRow.append(inp,ok,cancel); el.appendChild(addRow);
+    setTimeout(()=>{ inp.focus(); },0);
   }
 
   // Crianças vinculadas — aninhadas sob a família (barra lateral indica o vínculo)
@@ -2099,7 +2137,6 @@ function renderParent(){
   $('#settingPointValuePreview').textContent=`10 ⭐ = ${(10*(parseFloat(state.pointValueBRL)||0.10)).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}`;
   $('#settingParentPinEnabled').checked=!!state.parentPinEnabled;
   $('#familyNameInput').value=state.familyName||'';
-  $('#childNameInput').value=(state.childrenList.find(c=>c.id===state.childId)?.name)||'';
   renderChildrenList();
 
   $('#supabaseUrlInput').value=supabaseConfig.url||'';
@@ -3096,7 +3133,6 @@ function bindEvents(){
     catch(e){ toast('Erro ao buscar família','error'); }
     renderAll();
   });
-  $('#childCreateBtn').addEventListener('click', async ()=>{ try{ await createChildOnly(); toast('Criança adicionada','ok'); }catch(e){ toast('Erro ao adicionar criança','error'); } ensureInstancesForToday(); renderAll(); });
   $('#refreshChildrenBtn').addEventListener('click', async ()=>{ try{ await loadChildrenFromSupabase(); toast('Lista atualizada','ok'); }catch(e){ toast('Erro ao atualizar','error'); } renderAll(); });
 
   // Backup
@@ -3185,7 +3221,7 @@ function init(){
   // Banner de nova versão via Supabase app_config
   (async()=>{
     if(!revClient) return;
-    const LOCAL_VERSION='2.3.2';
+    const LOCAL_VERSION='2.4.0';
     const CACHE_KEY='kidstasks_update_check', CACHE_TTL=24*60*60*1000;
     const cached=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
     if(cached && Date.now()-cached.ts<CACHE_TTL) return;

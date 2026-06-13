@@ -5,6 +5,19 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [2.4.0] — Junho 2026
+
+### 🆕 Adicionado
+
+- **Uso 100% offline, sem nuvem** — agora é possível **criar a Família/Responsável e as crianças sem configurar o Supabase** (os dados ficam só no dispositivo). Antes, esses botões exigiam o Supabase; um usuário novo sem nuvem não conseguia nem montar a família. O app cumpre o offline-first de ponta a ponta — a sincronização entre dispositivos continua opcional via Supabase.
+- **Fluxo de cadastro mais intuitivo** — o botão **➕ adicionar criança** agora fica **no banner da Família/Responsável** e só aparece depois que ela é criada (antes ficava solto, ao lado de "Criar Família"). Reforça o caminho criar família → crianças → tarefas.
+
+### 📄 Documentação
+
+- README: deixado claro que o app é para **uma Família/Responsável com várias crianças** — para um segundo responsável, use outro dispositivo e (se sincronizar) uma conta Supabase separada. Adicionada a seção **Primeiros passos** (PIN padrão, criar Família/Responsável, crianças e tarefas).
+
+---
+
 ## [2.3.2] — Junho 2026
 
 ### 🐛 Correções
