@@ -3264,7 +3264,7 @@ function init(){
     if(!deviceId){ deviceId=crypto.randomUUID(); localStorage.setItem('kidstasks_device_id',deviceId); }
     try{
       await revClient.from('app_pings').upsert(
-        {app_name:'KidsTasks',version:'2.2.0',device_id:deviceId,ping_date:today},
+        {app_name:'KidsTasks',version:APP_VERSION,device_id:deviceId,ping_date:today},
         {onConflict:'app_name,device_id,ping_date',ignoreDuplicates:true}
       );
       localStorage.setItem(PING_KEY,today);

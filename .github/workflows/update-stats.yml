@@ -30,7 +30,10 @@ jobs:
             "${SB_URL}/rest/v1/app_pings?select=device_id&app_name=eq.KidsTasks&ping_date=gte.${THIRTY_DAYS_AGO}" \
             -H "apikey: ${SB_KEY}" \
             -H "Authorization: Bearer ${SB_KEY}")
-          COUNT=$(echo "$RESPONSE" | jq '[.[].device_id] | unique | length')
+          # Conta só dispositivos RECORRENTES: device_id que aparece em >=2 dias distintos.
+          # device_id é UUID no localStorage (aba anônima / storage limpo / reinstalação geram
+          # IDs efêmeros que pingam 1 dia só e inflam o número). >=2 dias filtra esse churn.
+          COUNT=$(echo "$RESPONSE" | jq '[.[].device_id] | group_by(.) | map(select(length>=2)) | length')
           TODAY=$(date +%Y-%m-%d)
           echo "{\"active_30d\":${COUNT},\"updated_at\":\"${TODAY}\"}" > stats.json
           echo "Dispositivos ativos (30d): $COUNT"
