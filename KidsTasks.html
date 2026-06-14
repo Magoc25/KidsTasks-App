@@ -2148,6 +2148,7 @@ function showMode(mode){
   state.mode=mode; saveState();
   $('#childPanel').classList.toggle('hidden', mode!=='child');
   $('#parentPanel').classList.toggle('hidden', mode!=='parent');
+  if(mode==='parent') setParentTab('week'); // sempre abre o painel do responsável na aba Semana
   if(mode==='child'){
     _justEnteredChild=true;
     // Retoma o AudioContext durante o evento de clique (exigido pelo Chrome)
