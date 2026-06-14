@@ -766,7 +766,7 @@
             <label style="font-size:13px;color:var(--slate)">Seu nome*
               <input class="input" id="reviewNameInput" maxlength="40" placeholder="Ex: Maria" />
             </label>
-            <label style="font-size:13px;color:var(--slate)">Comentário (opcional)
+            <label style="font-size:13px;color:var(--slate)">Comentário (opcional) — <span id="reviewCommentCount">0</span>/200
               <textarea id="reviewCommentInput" rows="2" maxlength="200" style="resize:none;padding:10px;border-radius:12px;border:1px solid var(--hairline-strong)"></textarea>
             </label>
             <label style="display:flex;gap:10px;align-items:center;color:var(--slate);font-size:13px">
@@ -2798,7 +2798,7 @@ async function openReviewsModal(mode='list'){
   $('#reviewFormMode').classList.toggle('hidden', mode!=='form');
   $('#reviewThankYou').classList.add('hidden');
   if(mode==='list'){ $('#reviewsList').innerHTML='<p style="color:var(--slate);font-size:14px;text-align:center">Carregando...</p>'; await loadSharedReviews(); renderReviewsList(); }
-  if(mode==='form'){ setReviewStar(0); $('#reviewNameInput').value=''; $('#reviewCommentInput').value=''; $('#reviewDonatedCheck').checked=true; }
+  if(mode==='form'){ setReviewStar(0); $('#reviewNameInput').value=''; $('#reviewCommentInput').value=''; $('#reviewCommentCount').textContent='0'; $('#reviewDonatedCheck').checked=true; }
 }
 function closeReviewsModal(){ $('#reviewsOverlay').classList.remove('open'); }
 function setReviewStar(n){ $('#reviewStarInput').value=n; $all('.star-btn').forEach((btn,i)=> btn.style.color = i<n ? '#facc15' : '#4b5563'); }
@@ -3095,6 +3095,7 @@ function bindEvents(){
   $('#reviewsOverlay').addEventListener('click', (e)=>{ if(e.target.id==='reviewsOverlay') closeReviewsModal(); });
   $all('.star-btn').forEach((b,i)=>b.addEventListener('click', ()=>setReviewStar(i+1)));
   $('#submitReviewBtn').addEventListener('click', submitReview);
+  $('#reviewCommentInput').addEventListener('input', e=>{ $('#reviewCommentCount').textContent=e.target.value.length; });
   $('#backToListBtn').addEventListener('click', ()=>openReviewsModal('list'));
   $('#reviewListToPixBtn').addEventListener('click', ()=>{ closeReviewsModal(); openPixModal(); });
 
