@@ -145,6 +145,9 @@
 .family-banner .fb-sub{font-size:12.5px;opacity:.85;margin-top:2px}
 .family-banner .fb-edit{margin-left:auto;background:rgba(255,255,255,.16);border:none;color:#fff;min-width:34px;height:34px;border-radius:9px;cursor:pointer;font-size:14px;flex:none}
 .family-banner .fb-chevron{font-size:13px;opacity:.9;flex:none;margin-left:2px;user-select:none}
+.cd-head{cursor:pointer;user-select:none;-webkit-user-select:none}
+.cd-head:focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-radius:8px}
+.cd-head .fb-chevron{font-size:12px;opacity:.7;margin-left:6px;flex:none}
 .children-nest{display:flex;flex-direction:column;gap:8px;margin-left:14px;padding-left:14px;border-left:3px solid var(--primary)}
 .children-nest:empty{display:none}
 .check{width:var(--hit);height:var(--hit);border-radius:var(--r-btn);border:1px solid var(--hairline-strong);background:#fff;cursor:pointer;display:grid;place-items:center}
@@ -288,16 +291,16 @@
       </div>
 
       <section class="card hidden" id="childHistoryCard" style="margin-top:16px">
-        <div class="hd"><h2>📅 Minhas Semanas</h2><div class="meta">histórico pessoal</div></div>
-        <div class="bd" id="childHistoryContent"></div>
+        <div class="hd cd-head" id="childHistoryHead" role="button" tabindex="0" aria-expanded="false" aria-controls="childHistoryContent" onclick="toggleChildSection('weeks')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleChildSection('weeks')}"><h2>📅 Minhas Semanas</h2><div class="meta">histórico pessoal <span class="fb-chevron" id="childHistoryChev" aria-hidden="true">▸</span></div></div>
+        <div class="bd hidden" id="childHistoryContent"></div>
       </section>
 
       <section class="card hidden" id="childGoalsCard" style="margin-top:16px">
-        <div class="hd">
+        <div class="hd cd-head" id="childGoalsHead" role="button" tabindex="0" aria-expanded="false" aria-controls="childGoalsList" onclick="toggleChildSection('goals')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleChildSection('goals')}">
           <h2>🏆 Minhas Conquistas</h2>
-          <div class="meta"><span id="childGoalStarsTotal">0</span> ⭐ acumuladas</div>
+          <div class="meta"><span id="childGoalStarsTotal">0</span> ⭐ acumuladas <span class="fb-chevron" id="childGoalsChev" aria-hidden="true">▸</span></div>
         </div>
-        <div class="bd" id="childGoalsList"></div>
+        <div class="bd hidden" id="childGoalsList"></div>
       </section>
     </section>
 
@@ -316,6 +319,7 @@
             <button class="pill" data-tab="tasks" type="button">🧾 Tarefas</button>
             <button class="pill" data-tab="goals" type="button">🏆 Metas</button>
             <button class="pill" data-tab="history" type="button" id="historyTabBtn">📋 Histórico<span id="historyBadge" class="hist-badge" style="display:none">0</span></button>
+            <button class="pill" data-tab="stats" type="button">📊 Estatísticas</button>
             <button class="pill" data-tab="settings" type="button">⚙️ Config</button>
           </div>
         </div>
@@ -529,6 +533,11 @@
         <div class="bd">
           <div id="historyContent" style="max-height:520px;overflow-y:auto"></div>
         </div>
+      </section>
+
+      <section class="card hidden" id="panelStats">
+        <div class="hd"><h2>📊 Estatísticas gerais</h2><div class="meta">resultados acumulados</div></div>
+        <div class="bd" id="statsContent"></div>
       </section>
     </section>
   </main>
@@ -1070,6 +1079,8 @@ const defaultState={
   taskOrder:[],
   childPixKeys:{},
   familyCollapsed:false,
+  childWeeksCollapsed:true,
+  childGoalsCollapsed:true,
   totalGoalStars:0,
   goals:[],
   tasks:[
@@ -1773,6 +1784,7 @@ function renderChild(){
   if(hasRunningTimer) startGlobalTick(); else stopGlobalTick();
   renderChildGoals();
   renderChildHistory();
+  applyChildSectionCollapse();
 }
 
 function renderChildGoals(){
@@ -2086,6 +2098,19 @@ function renderParent(){
       _prevBanner.classList.remove('hidden');
     } else { _prevBanner.innerHTML=''; _prevBanner.classList.add('hidden'); }
   }
+  // Botão "Registrar pagamento" (aba Semana): a semana em curso não é pagável.
+  // Se há semana passada pendente, o banner acima já oferece "Registrar" → oculta o botão duplicado;
+  // senão, mostra desabilitado com o motivo (o pagamento libera quando a semana virar).
+  const _btnPaid=$('#btnPaid');
+  if(_btnPaid){
+    if(_prevUnpaid){ _btnPaid.classList.add('hidden'); _btnPaid.disabled=false; }
+    else{
+      _btnPaid.classList.remove('hidden'); _btnPaid.disabled=true;
+      _btnPaid.textContent='💳 Pagamento após virar a semana';
+      _btnPaid.title='O pagamento fica disponível quando a semana terminar (domingo).';
+      _btnPaid.style.opacity='.55'; _btnPaid.style.cursor='not-allowed';
+    }
+  }
 
   // tasks list (com editar)
   const tasksBody=$('#tasksBody'); tasksBody.innerHTML='';
@@ -2162,12 +2187,13 @@ function unlockParent(){ if(!state.parentPinEnabled){ showMode('parent'); closeP
 function openCloudModal(){ $('#cloudOverlay').classList.add('open'); $('#supabaseUrlInput').focus(); }
 function closeCloudModal(){ $('#cloudOverlay').classList.remove('open'); }
 function setParentTab(tab){
-  const panels={approvals:$('#panelApprovals'),week:$('#panelWeek'),tasks:$('#panelTasks'),goals:$('#panelGoals'),history:$('#panelHistory'),settings:$('#panelSettings')};
+  const panels={approvals:$('#panelApprovals'),week:$('#panelWeek'),tasks:$('#panelTasks'),goals:$('#panelGoals'),history:$('#panelHistory'),stats:$('#panelStats'),settings:$('#panelSettings')};
   Object.entries(panels).forEach(([k,el])=>{ if(el) el.classList.toggle('hidden', k!==tab); });
   const weekActions=$('#panelWeekActions');
   if(weekActions) weekActions.classList.toggle('hidden', tab!=='week');
   $all('[data-tab]').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
   if(tab==='history'){ renderHistory(); if(supabaseClient&&state.familyId) loadAllChildrenWeekInstances().then(()=>renderHistory()).catch(()=>{}); }
+  if(tab==='stats') renderStats();
 }
 
 // ── Manutenção ──
@@ -2311,11 +2337,9 @@ function renderHistory(){
           <span class="badge ok">✅ Pago em ${new Date(h.paidAt).toLocaleDateString('pt-BR')}</span>
           <button type="button" onclick="unmarkHistoryPaid('${unmarkId}')" class="btn btn-secondary" style="height:30px;font-size:12px;padding:0 10px">Desfazer</button>
         </div>`
-      :h._isLive&&h.childId===state.childId
-        ?`<button type="button" onclick="openPaymentModal('week')" class="btn btn-primary" style="height:36px;font-size:13px">💳 Marcar pago</button>`
-        :h._isLive
-          ?`<span style="color:var(--warning);font-size:12px;font-weight:600">📊 Em andamento</span>`
-          :`<button type="button" onclick="openPaymentModal('${h.id}')" class="btn btn-primary" style="height:36px;font-size:13px">💳 Marcar pago</button>`;
+      :h._isLive
+        ?`<span style="color:var(--warning);font-size:12px;font-weight:600">📊 Em andamento</span>`
+        :`<button type="button" onclick="openPaymentModal('${h.id}')" class="btn btn-primary" style="height:36px;font-size:13px">💳 Marcar pago</button>`;
     // Estrelas monetárias: deriva de moneyBRL e taxa (evita fórmula errada ts-gs com tarefas 'Ambos')
     const _rate=parseFloat(state.pointValueBRL)||0.10;
     const moneyStars=_rate>0?Math.round(h.moneyBRL/_rate):0;
@@ -2375,6 +2399,100 @@ function renderChildHistory(){
       </div>
       <div style="margin-top:4px;font-size:15px;font-weight:600">⭐ ${h.totalStars} aprovadas${money}${goalPart}</div>`;
     container.appendChild(div);
+  });
+}
+
+// ── Painel da criança: seções recolhíveis (recolhidas por padrão) ──
+function applyChildSectionCollapse(){
+  [['childWeeksCollapsed','childHistoryContent','childHistoryChev','childHistoryHead'],
+   ['childGoalsCollapsed','childGoalsList','childGoalsChev','childGoalsHead']].forEach(([key,bodyId,chevId,headId])=>{
+    const collapsed=state[key]!==false; // undefined/true = recolhido (padrão)
+    const body=$('#'+bodyId), chev=$('#'+chevId), head=$('#'+headId);
+    if(body) body.classList.toggle('hidden',collapsed);
+    if(chev) chev.textContent=collapsed?'▸':'▾';
+    if(head) head.setAttribute('aria-expanded',String(!collapsed));
+  });
+}
+function toggleChildSection(which){
+  const key=which==='goals'?'childGoalsCollapsed':'childWeeksCollapsed';
+  state[key]=!(state[key]!==false); // inverte (padrão = recolhido)
+  saveState();
+  applyChildSectionCollapse();
+}
+
+// ── Estatísticas gerais do responsável (resultados acumulados) ──
+function renderStats(){
+  const container=$('#statsContent'); if(!container) return;
+  const currentWeekStart=getWeekRange().start;
+  const archived=(state.weekHistory||[]);
+  const pastArchived=archived.filter(h=>h.weekStart<currentWeekStart);
+  // Semana atual ao vivo (uma por criança); herda o status de pagamento de um eventual arquivo da semana atual
+  const liveEntries=(state.childrenList||[]).filter(c=>c.id).map(c=>{
+    const e=buildLiveCurrentWeekEntry(c.id);
+    const ac=archived.find(h=>h.childId===c.id&&h.weekStart===currentWeekStart);
+    if(ac){ e.paid=ac.paid; e.paidAt=ac.paidAt; }
+    return e;
+  }).filter(e=>e.totalStars>0);
+  const all=[...pastArchived,...liveEntries];
+
+  if(!all.length){
+    container.innerHTML='<p style="color:var(--slate);text-align:center;padding:24px">Ainda não há dados suficientes.<br>As estatísticas aparecem conforme as semanas acumulam estrelas aprovadas.</p>';
+    return;
+  }
+
+  let totalStars=0,totalTasks=0,totalGoalStars=0,moneyPaid=0,moneyPending=0;
+  const weeks=new Set(), byChild={};
+  all.forEach(h=>{
+    totalStars+=h.totalStars||0; totalTasks+=h.tasksApproved||0; totalGoalStars+=h.goalStars||0;
+    if(h.paid) moneyPaid+=h.moneyBRL||0; else moneyPending+=h.moneyBRL||0;
+    weeks.add(h.weekStart);
+    const b=byChild[h.childId]||(byChild[h.childId]={name:h.childName||'Criança',stars:0,money:0,tasks:0,goalStars:0,weeks:0,goals:0});
+    b.stars+=h.totalStars||0; b.money+=h.moneyBRL||0; b.tasks+=h.tasksApproved||0; b.goalStars+=h.goalStars||0; b.weeks+=1;
+  });
+  const totalMoney=moneyPaid+moneyPending;
+  const weeksCount=weeks.size;
+  const avgStars=weeksCount?Math.round(totalStars/weeksCount):0;
+  const delivered=(state.goalsHistory||[]);
+  delivered.forEach(g=>{ if(byChild[g.childId]) byChild[g.childId].goals+=1; });
+  const goalsDelivered=delivered.length;
+  let best=null; all.forEach(h=>{ if(!best||(h.totalStars||0)>(best.totalStars||0)) best=h; });
+
+  const money=v=>v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  const children=Object.values(byChild).sort((a,b)=>b.stars-a.stars);
+  const medals=['🥇','🥈','🥉'];
+
+  container.innerHTML=`
+    <div class="hist-grid">
+      <div class="hist-stat"><div class="v">⭐ ${totalStars}</div><div class="k">Estrelas acumuladas</div></div>
+      <div class="hist-stat"><div class="v">✅ ${totalTasks}</div><div class="k">Tarefas aprovadas</div></div>
+      <div class="hist-stat"><div class="v">🏆 ${goalsDelivered}</div><div class="k">Conquistas entregues</div></div>
+      <div class="hist-stat"><div class="v">📅 ${weeksCount}</div><div class="k">Semanas registradas</div></div>
+    </div>
+    <div class="summary" style="margin-top:16px">
+      <div class="tile" style="background:var(--tint-yellow)"><div class="k">💰 Total gerado</div><div class="v" style="font-size:18px">${money(totalMoney)}</div><div style="color:var(--slate);font-size:12px;margin-top:6px">💳 Pago ${money(moneyPaid)} · ⏳ Pendente ${money(moneyPending)}</div></div>
+      <div class="tile" style="background:var(--tint-peach)"><div class="k">📈 Média por semana</div><div class="v" style="font-size:18px">⭐ ${avgStars}</div><div style="color:var(--slate);font-size:12px;margin-top:6px">🏆 ${totalGoalStars} pts de meta acumulados</div></div>
+    </div>
+    ${best?`<div class="tile" style="margin-top:12px;background:var(--tint-mint)"><div class="k">🌟 Melhor semana</div><div class="v" style="font-size:15px">${esc(best.childName)} · ⭐ ${best.totalStars}</div><div style="color:var(--slate);font-size:12px;margin-top:4px">${best.weekStart===currentWeekStart?'Semana atual (em andamento)':fmtWeekLabel(best.weekStart,best.weekEnd)}</div></div>`:''}
+    <div style="margin-top:18px;font-size:13px;font-weight:700;color:var(--slate);margin-bottom:8px">👧 Por criança</div>
+    <div id="statsByChild"></div>`;
+
+  const wrap=container.querySelector('#statsByChild');
+  children.forEach((c,i)=>{
+    const div=document.createElement('div');
+    div.className='hist-card';
+    div.style.borderLeftColor='var(--primary)';
+    div.innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+        <div style="font-weight:600;font-size:15px">${medals[i]||'•'} ${esc(c.name)}</div>
+        <div style="font-size:13px;color:var(--slate)">${c.weeks} semana${c.weeks>1?'s':''}</div>
+      </div>
+      <div class="hist-grid">
+        <div class="hist-stat"><div class="v">⭐ ${c.stars}</div><div class="k">Estrelas</div></div>
+        <div class="hist-stat"><div class="v" style="font-size:15px">${money(c.money)}</div><div class="k">💰 Gerado</div></div>
+        <div class="hist-stat"><div class="v">🏆 ${c.goals}</div><div class="k">Conquistas</div></div>
+        <div class="hist-stat"><div class="v">✅ ${c.tasks}</div><div class="k">Tarefas</div></div>
+      </div>`;
+    wrap.appendChild(div);
   });
 }
 
@@ -2599,13 +2717,12 @@ let _payCtx=null, _payPixCode='';
 
 function openPaymentModal(ctx){
   const cid=activeChildId();
-  // Se ctx='week' mas semana atual tem 0 estrelas, redireciona para semana anterior não paga
+  // Pagamento só de semana já virada: 'week' redireciona p/ a semana passada não paga; nunca paga a semana em curso.
   if(ctx==='week'){
-    const sum=computeSummary();
-    if(sum.weekApprovedStars===0){
-      const unpaid=(state.weekHistory||[]).find(h=>h.childId===cid&&!h.paid&&(h.totalStars||0)>0);
-      if(unpaid) ctx=unpaid.id;
-    }
+    const _cur=getWeekRange().start;
+    const unpaid=(state.weekHistory||[]).find(h=>h.childId===cid&&!h.paid&&(h.totalStars||0)>0&&h.weekStart<_cur);
+    if(unpaid){ ctx=unpaid.id; }
+    else{ toast('O pagamento fica disponível quando a semana virar (domingo).','info'); return; }
   }
   _payCtx=ctx;
   const child=state.childrenList.find(c=>c.id===cid)||{};
