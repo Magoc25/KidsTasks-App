@@ -1,6 +1,8 @@
 name: Deploy do GitHub Pages
 on:
-  push: { branches: [master] }
+  push:
+    branches: [master]
+    paths-ignore: ['stats.json']   # commit diário de stats não redeploya (o badge lê o raw)
   workflow_dispatch:
 permissions: { contents: read, pages: write, id-token: write }
 concurrency: { group: pages, cancel-in-progress: false }   # 1 publicação por vez; não cancela a que roda
