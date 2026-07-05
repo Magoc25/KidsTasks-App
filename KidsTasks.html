@@ -230,6 +230,16 @@
 #childStatsCard .csm{font-size:12px;color:var(--slate);margin-top:2px;font-weight:600}
 #childStatsCard .crecord{margin-top:10px;text-align:center;font-size:14px;background:var(--tint-peach);border-radius:12px;padding:10px;font-weight:600}
 @media(prefers-reduced-motion:reduce){#childStatsCard .cbar>div{transition:none}}
+/* Mascote (topo do painel da criança) — muda com o nível */
+#childMascot.cm-banner{background:linear-gradient(120deg,var(--tint-lav),var(--tint-sky) 55%,var(--tint-yellow))}
+#childMascot .bd{display:flex;align-items:center;gap:14px;padding:14px 18px}
+#childMascot .cm-emoji{font-size:46px;line-height:1;flex:none;filter:drop-shadow(0 2px 4px rgba(0,0,0,.14))}
+#childMascot .cm-txt{min-width:0}
+#childMascot .cm-hi{font-size:18px;font-weight:800;letter-spacing:-.2px}
+#childMascot .cm-lv{font-size:13px;color:var(--slate);font-weight:600;margin-top:2px}
+@keyframes cm-pop{0%{transform:scale(1)}30%{transform:scale(1.16) rotate(-5deg)}60%{transform:scale(.96)}100%{transform:scale(1)}}
+#childMascot.cm-pop .cm-emoji{animation:cm-pop .6s ease}
+@media(prefers-reduced-motion:reduce){#childMascot.cm-pop .cm-emoji{animation:none}}
 @media(max-width:640px){.hist-grid{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
@@ -254,6 +264,9 @@
 
   <main class="container">
     <section id="childPanel">
+      <section class="card cm-banner hidden" id="childMascot" style="margin-bottom:16px;overflow:hidden">
+        <div class="bd" id="childMascotContent"></div>
+      </section>
       <div class="grid">
         <section class="card">
           <div class="hd"><h2>Tarefas de hoje</h2><div class="meta" id="todayLabel"></div></div>
@@ -503,6 +516,19 @@
                 <span id="settingPointValuePreview" style="color:var(--slate);font-size:14px"></span>
               </div>
               <label style="display:flex;gap:10px;align-items:center;margin-top:12px"><input type="checkbox" id="toggleShowMoney" /> <span><strong>Mostrar dinheiro para a criança</strong> (senão, mostra só ⭐)</span></label>
+            </div>
+          </div>
+
+          <div class="card" id="levelSettingsCard" style="box-shadow:none;background:var(--surface);margin-bottom:12px">
+            <div class="bd">
+              <h3 style="margin:0 0 6px;font-size:16px">🎮 Níveis da criança (Minha Aventura)</h3>
+              <p style="margin:0 0 12px;color:var(--slate);font-size:14px;line-height:1.5">Quantas ⭐ acumuladas a criança precisa para alcançar cada nível. Ajuste à realidade da sua família — o Nível 1 (🌱 Brotinho) começa sempre em 0.</p>
+              <div id="levelThresholdsInputs" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+                <button class="btn btn-primary" id="levelThresholdsSaveBtn" type="button">Salvar níveis</button>
+                <button class="btn btn-secondary" id="levelThresholdsResetBtn" type="button">Restaurar padrão</button>
+              </div>
+              <p id="levelThresholdsMsg" style="font-size:12px;color:var(--slate);margin:8px 0 0"></p>
             </div>
           </div>
 
@@ -865,6 +891,15 @@ function celebrateGoal(){
   }
   playGoalSound();
 }
+function celebrateLevelUp(level){
+  if(typeof confetti!=='undefined'){
+    confetti({particleCount:160,spread:100,origin:{y:.55},colors:['#FFD700','#6e56cf','#21c36b','#ff8fb1','#ffd36b']});
+    setTimeout(()=>{ confetti({particleCount:80,angle:60,spread:60,origin:{x:0,y:.7}}); confetti({particleCount:80,angle:120,spread:60,origin:{x:1,y:.7}}); },350);
+  }
+  playGoalSound();
+  const b=$('#childMascot'); if(b){ b.classList.remove('cm-pop'); void b.offsetWidth; b.classList.add('cm-pop'); }
+  toast(`🎉 Subiu de nível! Agora você é ${level.icon} ${level.name}!`,'ok');
+}
 
 // ── Animações de entrada no painel da criança ──
 let _justEnteredChild=false, _prevDoneCount=0, _prevGoalStars=0;
@@ -1099,6 +1134,8 @@ const defaultState={
   familyCollapsed:false,
   childWeeksCollapsed:true,
   childGoalsCollapsed:true,
+  childLevelSeen:{},
+  levelThresholds:null,
   totalGoalStars:0,
   goals:[],
   tasks:[
@@ -2213,6 +2250,7 @@ function setParentTab(tab){
   $all('[data-tab]').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
   if(tab==='history'){ renderHistory(); if(supabaseClient&&state.familyId) loadAllChildrenWeekInstances().then(()=>renderHistory()).catch(()=>{}); }
   if(tab==='stats') renderStats();
+  if(tab==='settings') renderLevelSettings();
 }
 
 // ── Manutenção ──
@@ -2518,23 +2556,27 @@ function renderStats(){
 // ── Painel da criança: "Minha Aventura" (estatísticas lúdicas + nível) ──
 const CHILD_LEVELS=[
   {min:0,name:'Brotinho',icon:'🌱'},
-  {min:20,name:'Estrelinha',icon:'⭐'},
-  {min:50,name:'Super Estrela',icon:'🌟'},
-  {min:100,name:'Foguete',icon:'🚀'},
-  {min:200,name:'Herói das Tarefas',icon:'🦸'},
-  {min:350,name:'Campeão',icon:'🏆'},
-  {min:600,name:'Lenda',icon:'👑'}
+  {min:70,name:'Estrelinha',icon:'⭐'},
+  {min:175,name:'Super Estrela',icon:'🌟'},
+  {min:350,name:'Foguete',icon:'🚀'},
+  {min:640,name:'Herói das Tarefas',icon:'🦸'},
+  {min:1080,name:'Campeão',icon:'🏆'},
+  {min:1650,name:'Lenda',icon:'👑'}
 ];
+// Limiares efetivos: padrão do CHILD_LEVELS, sobrescritos por state.levelThresholds quando o responsável edita.
+function childLevels(){
+  const t=state.levelThresholds;
+  return CHILD_LEVELS.map((l,i)=>({name:l.name,icon:l.icon,min:(Array.isArray(t)&&typeof t[i]==='number')?t[i]:l.min}));
+}
 function renderChildStats(){
-  const card=$('#childStatsCard'), container=$('#childStatsContent');
-  if(!card||!container) return;
   const cid=activeChildId();
+  const mascot=$('#childMascot'), mascotC=$('#childMascotContent');
+  const card=$('#childStatsCard'), container=$('#childStatsContent');
+  if(!cid){ if(mascot) mascot.classList.add('hidden'); if(card) card.classList.add('hidden'); return; }
   const currentWeekStart=getWeekRange().start;
   const past=(state.weekHistory||[]).filter(h=>h.childId===cid&&h.weekStart<currentWeekStart);
   const live=buildLiveCurrentWeekEntry(cid);
   const all=[...past]; if(live.totalStars>0) all.push(live);
-  if(!all.length){ card.classList.add('hidden'); return; } // sem dados → não mostra bloco vazio
-  card.classList.remove('hidden');
 
   let totalStars=0,totalTasks=0,money=0,best=null; const weeks=new Set();
   all.forEach(h=>{
@@ -2545,9 +2587,29 @@ function renderChildStats(){
   const trophies=(state.goalsHistory||[]).filter(h=>h.childId===cid).length;
   const weeksCount=weeks.size;
 
-  // Nível pela quantidade de estrelas acumuladas
-  let li=0; for(let i=0;i<CHILD_LEVELS.length;i++){ if(totalStars>=CHILD_LEVELS[i].min) li=i; }
-  const cur=CHILD_LEVELS[li], next=CHILD_LEVELS[li+1], lvl=li+1;
+  // Nível pela quantidade de estrelas acumuladas (limiares editáveis pelo responsável)
+  const LV=childLevels();
+  let li=0; for(let i=0;i<LV.length;i++){ if(totalStars>=LV[i].min) li=i; }
+  const cur=LV[li], next=LV[li+1], lvl=li+1;
+
+  // Mascote no topo do painel (muda com o nível) — sempre visível quando há criança
+  if(mascot&&mascotC){
+    const _c=(state.childrenList||[]).find(c=>c.id===cid)||{};
+    mascotC.innerHTML=`<span class="cm-emoji">${cur.icon}</span><div class="cm-txt"><div class="cm-hi">Você é ${esc(cur.name)}!</div><div class="cm-lv">Nível ${lvl} · ${esc(_c.name||'sua aventura')} ⭐</div></div>`;
+    mascot.classList.remove('hidden');
+  }
+
+  // Comemora ao subir de nível (só quando a criança está de fato vendo o painel)
+  const seenMap=state.childLevelSeen||(state.childLevelSeen={});
+  const seen=seenMap[cid];
+  if(seen===undefined){ seenMap[cid]=lvl; saveState(); }
+  else if(lvl>seen){ if(state.mode==='child'){ seenMap[cid]=lvl; saveState(); celebrateLevelUp(cur); } }
+  else if(lvl<seen){ seenMap[cid]=lvl; saveState(); }
+
+  // Card "Minha Aventura" — esconde se ainda não há dados
+  if(!card||!container) return;
+  if(!all.length){ card.classList.add('hidden'); return; }
+  card.classList.remove('hidden');
   let pct, hero;
   if(next){
     pct=Math.max(5,Math.min(100,Math.round(((totalStars-cur.min)/(next.min-cur.min))*100)));
@@ -2569,6 +2631,39 @@ function renderChildStats(){
     </div>
     ${best?`<div class="crecord">🏅 Recorde: <b>${best.totalStars}⭐</b> numa semana só!</div>`:''}
     ${state.showMoneyToChild?`<div class="crecord" style="background:var(--tint-mint)">💰 Cofrinho: <b>${money.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</b></div>`:''}`;
+}
+
+// ── Níveis da criança editáveis pelo responsável (Configurações) ──
+function renderLevelSettings(){
+  const wrap=$('#levelThresholdsInputs'); if(!wrap) return;
+  const LV=childLevels();
+  wrap.innerHTML='';
+  for(let i=1;i<LV.length;i++){
+    const l=LV[i];
+    const lab=document.createElement('label');
+    lab.style.cssText='display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--slate)';
+    const span=document.createElement('span'); span.textContent=`${l.icon} Nível ${i+1} · ${l.name}`;
+    const inp=document.createElement('input');
+    inp.className='input'; inp.type='number'; inp.min='1'; inp.step='1';
+    inp.dataset.lvl=String(i); inp.value=String(l.min); inp.style.width='100%';
+    lab.append(span,inp); wrap.appendChild(lab);
+  }
+  const msg=$('#levelThresholdsMsg');
+  if(msg) msg.textContent=Array.isArray(state.levelThresholds)?'✏️ Usando limiares personalizados.':'Usando o padrão sugerido.';
+}
+function saveLevelThresholds(){
+  const inputs=$all('#levelThresholdsInputs input[data-lvl]');
+  const arr=[0]; let prev=0, bad=false;
+  inputs.forEach(inp=>{ const v=Math.round(parseFloat(inp.value)); if(!Number.isFinite(v)||v<=prev) bad=true; arr.push(v); prev=v; });
+  if(bad||arr.length!==CHILD_LEVELS.length) return toast('Cada nível precisa ser um número maior que o anterior.','error');
+  state.levelThresholds=arr; saveState();
+  renderLevelSettings(); renderChildStats();
+  toast('Níveis salvos ✅','ok');
+}
+function resetLevelThresholds(){
+  state.levelThresholds=null; saveState();
+  renderLevelSettings(); renderChildStats();
+  toast('Níveis voltaram ao padrão','ok');
 }
 
 // Corrige moneyBRL=0 em entradas históricas de tarefas 'Ambos' salvas com fórmula antiga
@@ -2907,7 +3002,7 @@ async function importBackup(file){
     const text=await file.text();
     const data=JSON.parse(text);
     if(!data||typeof data!=='object') throw new Error('Arquivo inválido');
-    const fields=['tasks','instances','goals','weekHistory','goalsHistory','taskOrder','familyId','familyName','childId','childrenList','pointValueBRL','showMoneyToChild','parentPin','parentPinEnabled','lastWeekStart','totalGoalStars'];
+    const fields=['tasks','instances','goals','weekHistory','goalsHistory','taskOrder','familyId','familyName','childId','childrenList','pointValueBRL','showMoneyToChild','levelThresholds','parentPin','parentPinEnabled','lastWeekStart','totalGoalStars'];
     const arrayFields=new Set(['tasks','instances','goals','weekHistory','goalsHistory','taskOrder','childrenList']);
     fields.forEach(k=>{ if(data[k]===undefined) return; if(arrayFields.has(k) && !Array.isArray(data[k])) return; state[k]=data[k]; });
     saveState(); ensureInstancesForToday(); renderAll();
@@ -3295,6 +3390,8 @@ function bindEvents(){
   $('#settingWeekModeSaveBtn').addEventListener('click', ()=>{ state.weekMode=$('#settingWeekMode').value||'dom-sab'; saveState(); toast('Período semanal salvo','ok'); renderAll(); });
   $('#toggleShowMoney').addEventListener('change', (e)=>{ state.showMoneyToChild=e.target.checked; saveState(); toast('Salvo','ok'); });
   $('#settingPointValueSaveBtn').addEventListener('click', ()=>{ const v=parseFloat($('#settingPointValue').value); if(!v||v<=0) return toast('Digite um valor válido','error'); state.pointValueBRL=v; saveState(); toast('Taxa salva','ok'); renderAll(); });
+  $('#levelThresholdsSaveBtn').addEventListener('click', saveLevelThresholds);
+  $('#levelThresholdsResetBtn').addEventListener('click', resetLevelThresholds);
   // Timer overlay
   $('#timerOvStop').addEventListener('click', async()=>{
     if(_timerOvInst && _timerOvTask) await stopTimer(_timerOvInst, _timerOvTask);
