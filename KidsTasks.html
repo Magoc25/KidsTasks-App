@@ -240,6 +240,9 @@
 @keyframes cm-pop{0%{transform:scale(1)}30%{transform:scale(1.16) rotate(-5deg)}60%{transform:scale(.96)}100%{transform:scale(1)}}
 #childMascot.cm-pop .cm-emoji{animation:cm-pop .6s ease}
 @media(prefers-reduced-motion:reduce){#childMascot.cm-pop .cm-emoji{animation:none}}
+/* Seletor de gênero por criança (Config) */
+.gender-pick{width:32px;height:30px;border-radius:8px;border:1px solid var(--hairline-strong);background:#fff;cursor:pointer;font-size:15px;line-height:1;padding:0}
+.gender-pick.on{border-color:var(--primary);background:var(--tint-lav);box-shadow:0 0 0 2px rgba(110,86,207,.15)}
 @media(max-width:640px){.hist-grid{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
@@ -522,7 +525,7 @@
           <div class="card" id="levelSettingsCard" style="box-shadow:none;background:var(--surface);margin-bottom:12px">
             <div class="bd">
               <h3 style="margin:0 0 6px;font-size:16px">🎮 Níveis da criança (Minha Aventura)</h3>
-              <p style="margin:0 0 12px;color:var(--slate);font-size:14px;line-height:1.5">Quantas ⭐ acumuladas a criança precisa para alcançar cada nível. Ajuste à realidade da sua família — o Nível 1 (🌱 Brotinho) começa sempre em 0.</p>
+              <p style="margin:0 0 12px;color:var(--slate);font-size:14px;line-height:1.5">Quantas ⭐ acumuladas a criança precisa para alcançar cada nível. Ajuste à realidade da sua família — o Nível 1 começa sempre em 0. Os <strong>nomes seguem o gênero de cada criança</strong> (ex.: 🦸 Herói/Heroína), que você define na lista de crianças acima.</p>
               <div id="levelThresholdsInputs" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
                 <button class="btn btn-primary" id="levelThresholdsSaveBtn" type="button">Salvar níveis</button>
@@ -1136,6 +1139,7 @@ const defaultState={
   childGoalsCollapsed:true,
   childLevelSeen:{},
   levelThresholds:null,
+  childGender:{},
   totalGoalStars:0,
   goals:[],
   tasks:[
@@ -2080,6 +2084,19 @@ function renderChildrenList(){
     uploadBtn.textContent=child.avatarData?'📷 Alterar foto':'📷 Adicionar foto';
     uploadBtn.addEventListener('click',()=>{ $('#avatarFileInput').dataset.childId=child.id; $('#avatarFileInput').click(); });
     mid.append(title,sub,uploadBtn);
+    // Gênero da criança — define os títulos de nível (Herói/Heroína, Campeão/Campeã, Brotinho/Brotinha)
+    const genWrap=document.createElement('div'); genWrap.style.cssText='display:flex;gap:5px;align-items:center;margin-top:8px;flex-wrap:wrap';
+    const genLbl=document.createElement('span'); genLbl.style.cssText='font-size:11px;color:var(--slate)'; genLbl.textContent='Gênero:';
+    genWrap.appendChild(genLbl);
+    const _cg=getChildGender(child.id);
+    [['f','👧','Menina'],['m','👦','Menino'],['','🙂','Neutro']].forEach(([g,emo,tt])=>{
+      const gb=document.createElement('button'); gb.type='button';
+      gb.className='gender-pick'+(_cg===g?' on':''); gb.textContent=emo; gb.title=tt;
+      gb.setAttribute('aria-label',tt); gb.setAttribute('aria-pressed',String(_cg===g));
+      gb.addEventListener('click',(e)=>{ e.stopPropagation(); setChildGender(child.id,g); });
+      genWrap.appendChild(gb);
+    });
+    mid.appendChild(genWrap);
     const btn=document.createElement('button'); btn.className='btn '+(child.id===state.childId?'btn-primary':'btn-secondary'); btn.style.height='40px'; btn.textContent=(child.id===state.childId)?'Ativa':'Ativar';
     btn.addEventListener('click', async ()=>{ state.childId=child.id; saveState(); toast('Criança ativa: '+child.name,'ok');
       if(supabaseClient && state.familyId){ await loadTasksFromSupabase().catch(()=>{}); await loadTaskInstancesFromSupabase().catch(()=>{}); await loadGoalsFromSupabase().catch(()=>{}); }
@@ -2555,18 +2572,27 @@ function renderStats(){
 
 // ── Painel da criança: "Minha Aventura" (estatísticas lúdicas + nível) ──
 const CHILD_LEVELS=[
-  {min:0,name:'Brotinho',icon:'🌱'},
-  {min:70,name:'Estrelinha',icon:'⭐'},
-  {min:175,name:'Super Estrela',icon:'🌟'},
-  {min:350,name:'Foguete',icon:'🚀'},
-  {min:640,name:'Herói das Tarefas',icon:'🦸'},
-  {min:1080,name:'Campeão',icon:'🏆'},
-  {min:1650,name:'Lenda',icon:'👑'}
+  {min:0,   icon:'🌱', m:'Brotinho',           f:'Brotinha',            n:'Broto'},
+  {min:70,  icon:'⭐', name:'Estrelinha'},
+  {min:175, icon:'🌟', name:'Super Estrela'},
+  {min:350, icon:'🚀', name:'Foguete'},
+  {min:640, icon:'🦸', m:'Herói das Tarefas',  f:'Heroína das Tarefas', n:'Craque das Tarefas'},
+  {min:1080,icon:'🏆', m:'Campeão',            f:'Campeã',              n:'Fera das Tarefas'},
+  {min:1650,icon:'👑', name:'Lenda'}
 ];
-// Limiares efetivos: padrão do CHILD_LEVELS, sobrescritos por state.levelThresholds quando o responsável edita.
-function childLevels(){
+// Nome do nível conforme o gênero da criança ('f'/'m'/neutro); níveis universais têm `name`.
+function levelName(l,g){ return l.name || (g==='f'?l.f : g==='m'?l.m : l.n); }
+// Limiares efetivos: padrão do CHILD_LEVELS, sobrescritos por state.levelThresholds; nomes seguem o gênero.
+function childLevels(gender){
   const t=state.levelThresholds;
-  return CHILD_LEVELS.map((l,i)=>({name:l.name,icon:l.icon,min:(Array.isArray(t)&&typeof t[i]==='number')?t[i]:l.min}));
+  return CHILD_LEVELS.map((l,i)=>({icon:l.icon,name:levelName(l,gender),min:(Array.isArray(t)&&typeof t[i]==='number')?t[i]:l.min}));
+}
+function getChildGender(cid){ return (state.childGender||{})[cid]||''; }
+function setChildGender(cid,g){
+  if(!state.childGender) state.childGender={};
+  state.childGender[cid]=g; saveState();
+  renderChildrenList(); renderChildStats();
+  toast('Gênero atualizado','ok');
 }
 function renderChildStats(){
   const cid=activeChildId();
@@ -2588,7 +2614,7 @@ function renderChildStats(){
   const weeksCount=weeks.size;
 
   // Nível pela quantidade de estrelas acumuladas (limiares editáveis pelo responsável)
-  const LV=childLevels();
+  const LV=childLevels(getChildGender(cid));
   let li=0; for(let i=0;i<LV.length;i++){ if(totalStars>=LV[i].min) li=i; }
   const cur=LV[li], next=LV[li+1], lvl=li+1;
 
@@ -2636,7 +2662,7 @@ function renderChildStats(){
 // ── Níveis da criança editáveis pelo responsável (Configurações) ──
 function renderLevelSettings(){
   const wrap=$('#levelThresholdsInputs'); if(!wrap) return;
-  const LV=childLevels();
+  const LV=childLevels('');
   wrap.innerHTML='';
   for(let i=1;i<LV.length;i++){
     const l=LV[i];
@@ -3002,7 +3028,7 @@ async function importBackup(file){
     const text=await file.text();
     const data=JSON.parse(text);
     if(!data||typeof data!=='object') throw new Error('Arquivo inválido');
-    const fields=['tasks','instances','goals','weekHistory','goalsHistory','taskOrder','familyId','familyName','childId','childrenList','pointValueBRL','showMoneyToChild','levelThresholds','parentPin','parentPinEnabled','lastWeekStart','totalGoalStars'];
+    const fields=['tasks','instances','goals','weekHistory','goalsHistory','taskOrder','familyId','familyName','childId','childrenList','pointValueBRL','showMoneyToChild','levelThresholds','childGender','parentPin','parentPinEnabled','lastWeekStart','totalGoalStars'];
     const arrayFields=new Set(['tasks','instances','goals','weekHistory','goalsHistory','taskOrder','childrenList']);
     fields.forEach(k=>{ if(data[k]===undefined) return; if(arrayFields.has(k) && !Array.isArray(data[k])) return; state[k]=data[k]; });
     saveState(); ensureInstancesForToday(); renderAll();
