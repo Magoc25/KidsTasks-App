@@ -243,6 +243,16 @@
 /* Seletor de gênero por criança (Config) */
 .gender-pick{width:32px;height:30px;border-radius:8px;border:1px solid var(--hairline-strong);background:#fff;cursor:pointer;font-size:15px;line-height:1;padding:0}
 .gender-pick.on{border-color:var(--primary);background:var(--tint-lav);box-shadow:0 0 0 2px rgba(110,86,207,.15)}
+/* Trilha de níveis (🗺️ Sua jornada) dentro do "Minha Aventura" */
+#childStatsCard .clevels{display:flex;flex-direction:column;gap:6px}
+#childStatsCard .clevel-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;border:1px solid rgba(15,15,15,.06);background:#fff}
+#childStatsCard .clevel-row.done{background:var(--tint-mint)}
+#childStatsCard .clevel-row.now{background:linear-gradient(120deg,var(--tint-lav),var(--tint-sky));border-color:var(--primary);box-shadow:0 0 0 2px rgba(110,86,207,.15)}
+#childStatsCard .clevel-row.locked{opacity:.55}
+#childStatsCard .clevel-ico{font-size:24px;flex:none;width:32px;text-align:center}
+#childStatsCard .clevel-mid{min-width:0}
+#childStatsCard .clevel-nm{font-size:14px;font-weight:700}
+#childStatsCard .clevel-sub{font-size:12px;color:var(--slate)}
 @media(max-width:640px){.hist-grid{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
@@ -2572,13 +2582,16 @@ function renderStats(){
 
 // ── Painel da criança: "Minha Aventura" (estatísticas lúdicas + nível) ──
 const CHILD_LEVELS=[
-  {min:0,   icon:'🌱', m:'Brotinho',           f:'Brotinha',            n:'Broto'},
-  {min:70,  icon:'⭐', name:'Estrelinha'},
-  {min:175, icon:'🌟', name:'Super Estrela'},
-  {min:350, icon:'🚀', name:'Foguete'},
-  {min:640, icon:'🦸', m:'Herói das Tarefas',  f:'Heroína das Tarefas', n:'Craque das Tarefas'},
-  {min:1080,icon:'🏆', m:'Campeão',            f:'Campeã',              n:'Fera das Tarefas'},
-  {min:1650,icon:'👑', name:'Lenda'}
+  {min:0,    icon:'🌱', m:'Brotinho',           f:'Brotinha',            n:'Broto'},
+  {min:70,   icon:'⭐', name:'Estrelinha'},
+  {min:175,  icon:'🌟', name:'Super Estrela'},
+  {min:350,  icon:'🚀', name:'Foguete'},
+  {min:600,  icon:'🦸', m:'Herói das Tarefas',  f:'Heroína das Tarefas', n:'Craque das Tarefas'},
+  {min:880,  icon:'🥷', name:'Ninja das Tarefas'},
+  {min:1200, icon:'🏆', m:'Campeão',            f:'Campeã',              n:'Fera das Tarefas'},
+  {min:1560, icon:'🧙', m:'Mago das Tarefas',   f:'Maga das Tarefas',    n:'Mestre das Tarefas'},
+  {min:1980, icon:'🐉', name:'Dragão das Tarefas'},
+  {min:2500, icon:'👑', name:'Lenda'}
 ];
 // Nome do nível conforme o gênero da criança ('f'/'m'/neutro); níveis universais têm `name`.
 function levelName(l,g){ return l.name || (g==='f'?l.f : g==='m'?l.m : l.n); }
@@ -2643,6 +2656,12 @@ function renderChildStats(){
   } else { pct=100; hero='Nível máximo! Você é uma LENDA 👑'; }
 
   const plural=(n,s,p)=>n===1?s:p;
+  // Trilha de níveis — mostra o que já conquistou, onde está e o que falta (estimula a criança)
+  const roadmap=LV.map((l,i)=>{
+    const st=i<li?'done':i===li?'now':'locked';
+    const badge=i<li?'✅ conquistado':i===li?'🎯 você está aqui!':`🔒 faltam ${l.min-totalStars}⭐`;
+    return `<div class="clevel-row ${st}"><span class="clevel-ico">${l.icon}</span><div class="clevel-mid"><div class="clevel-nm">Nível ${i+1} · ${esc(l.name)}</div><div class="clevel-sub">${badge}</div></div></div>`;
+  }).join('');
   container.innerHTML=`
     <div class="clevel">
       <div style="font-size:16px;font-weight:800">${cur.icon} Nível ${lvl} · ${esc(cur.name)}</div>
@@ -2656,7 +2675,9 @@ function renderChildStats(){
       <div class="cstat"><div class="cbig">🔥 ${weeksCount}</div><div class="csm">${plural(weeksCount,'semana de aventura','semanas de aventura')}</div></div>
     </div>
     ${best?`<div class="crecord">🏅 Recorde: <b>${best.totalStars}⭐</b> numa semana só!</div>`:''}
-    ${state.showMoneyToChild?`<div class="crecord" style="background:var(--tint-mint)">💰 Cofrinho: <b>${money.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</b></div>`:''}`;
+    ${state.showMoneyToChild?`<div class="crecord" style="background:var(--tint-mint)">💰 Cofrinho: <b>${money.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</b></div>`:''}
+    <div style="margin-top:18px;font-size:13px;font-weight:700;color:var(--slate);margin-bottom:8px">🗺️ Sua jornada de níveis</div>
+    <div class="clevels">${roadmap}</div>`;
 }
 
 // ── Níveis da criança editáveis pelo responsável (Configurações) ──
