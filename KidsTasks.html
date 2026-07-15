@@ -3140,9 +3140,17 @@ async function importBackup(file){
     const text=await file.text();
     const data=JSON.parse(text);
     if(!data||typeof data!=='object') throw new Error('Arquivo inválido');
-    const fields=['tasks','instances','goals','weekHistory','goalsHistory','taskOrder','familyId','familyName','childId','childrenList','pointValueBRL','showMoneyToChild','levelThresholds','childGender','parentPin','parentPinEnabled','lastWeekStart','totalGoalStars'];
+    const fields=['tasks','instances','goals','weekHistory','goalsHistory','taskOrder','familyId','familyName','childId','childrenList','pointValueBRL','showMoneyToChild','weekMode','levelThresholds','childGender','childPixKeys','parentPin','parentPinEnabled','lastWeekStart','totalGoalStars'];
     const arrayFields=new Set(['tasks','instances','goals','weekHistory','goalsHistory','taskOrder','childrenList']);
-    fields.forEach(k=>{ if(data[k]===undefined) return; if(arrayFields.has(k) && !Array.isArray(data[k])) return; state[k]=data[k]; });
+    // Mapas por id da criança: um valor não-objeto aqui faria os setters (setChildGender/saveChildPixKey)
+    // falharem em silêncio — atribuir propriedade a um primitivo é no-op fora do modo estrito.
+    const mapFields=new Set(['childGender','childPixKeys']);
+    fields.forEach(k=>{ if(data[k]===undefined) return;
+      if(arrayFields.has(k) && !Array.isArray(data[k])) return;
+      if(mapFields.has(k) && (typeof data[k]!=='object' || data[k]===null || Array.isArray(data[k]))) return;
+      state[k]=data[k]; });
+    // O saveState abaixo recarimba por diff as configs restauradas (hora atual), então a restauração
+    // vence a nuvem no próximo merge em vez de ser reapagada por ela.
     saveState(); ensureInstancesForToday(); renderAll();
     toast('Backup importado ✅','ok');
   }catch(e){ toast('Erro ao importar: '+e.message,'error'); }
