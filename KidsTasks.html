@@ -3643,20 +3643,13 @@ function init(){
     loadTaskInstancesFromSupabase().then(()=>renderAll()).catch(()=>{});
   }, 30000);
 
-  // Versão automática via CHANGELOG.md
-  (async()=>{
+  // Versão exibida = a constante deste build. Tem de refletir o código que está RODANDO; buscá-la
+  // do CHANGELOG publicado mostrava a versão de outro build (e o cache local segurava por horas).
+  // Detectar que existe versão nova é outra coisa — é o banner logo abaixo (app_config).
+  (()=>{
     const el=document.getElementById('appVersion'); if(!el) return;
-    const CACHE_KEY='kidstasks_app_version';
-    const cached=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');
-    if(cached && cached.v) el.textContent='© MGC · '+cached.v;  // mostra na hora; revalida abaixo
-    try{
-      const res=await fetch('./CHANGELOG.md?_='+Date.now(),{cache:'no-cache'});
-      if(!res.ok) return;
-      const match=(await res.text()).match(/##\s+\[(\d+\.\d+\.\d+)\]/);
-      if(!match) return;
-      const v='v'+match[1]; el.textContent='© MGC · '+v;
-      localStorage.setItem(CACHE_KEY,JSON.stringify({v,ts:Date.now()}));
-    }catch(e){}
+    el.textContent='© MGC · v'+APP_VERSION;
+    localStorage.removeItem('kidstasks_app_version'); // cache do esquema antigo
   })();
 
   // Banner de nova versão via Supabase app_config
