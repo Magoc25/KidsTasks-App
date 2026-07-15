@@ -160,6 +160,7 @@ Se quiser que os dados apareçam no PC **e** no celular automaticamente, configu
 CREATE TABLE public.families (
   id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   name       text        NOT NULL,
+  settings   jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 

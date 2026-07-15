@@ -1150,6 +1150,8 @@ const defaultState={
   childLevelSeen:{},
   levelThresholds:null,
   childGender:{},
+  settingsMeta:{},
+  settingsMetaSeeded:false,
   totalGoalStars:0,
   goals:[],
   tasks:[
@@ -1198,7 +1200,95 @@ function instancesForChild(cid){
   return (state.instances||[]).filter(i => (i.childId) === c);
 }
 
-function saveState(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(e){console.error('[App] saveState',e);} }
+// ===== Configurações da família — sincronizadas via `families.settings` (jsonb) =====
+// Só entra aqui o que vale para a família inteira. Ficam de fora, locais por aparelho: childId
+// (criança ativa neste device), os colapsos de UI, childLevelSeen (celebração de nível) e as
+// chaves do Supabase. Formato versionado {v,values,meta}: `meta` guarda o carimbo POR CHAVE, para
+// que um aparelho que nunca mexeu numa config não empurre o próprio padrão por cima do outro.
+const SYNCED_SETTINGS=['pointValueBRL','weekMode','showMoneyToChild','levelThresholds','childGender','childPixKeys','parentPin','parentPinEnabled'];
+let _settingsPushTimer=null;
+// Supabase sem o ALTER TABLE: degrada para local-only em vez de derrubar o resto do sync.
+let _settingsColumnMissing=false;
+function _snapSettings(){const s={};for(const k of SYNCED_SETTINGS) s[k]=JSON.stringify(state[k]??null);return s;}
+let _settingsSnapshot=_snapSettings();
+
+// Carimba por chave o que mudou desde a última passagem. Por diff (e não em cada setter) para
+// cobrir todo ponto de escrita, inclusive os que vierem depois.
+function stampSettingChanges(){
+  if(!state.settingsMeta) state.settingsMeta={};
+  const now=Date.now(); let changed=false;
+  for(const k of SYNCED_SETTINGS){
+    const cur=JSON.stringify(state[k]??null);
+    if(_settingsSnapshot[k]===cur) continue;
+    _settingsSnapshot[k]=cur; state.settingsMeta[k]=now; changed=true;
+  }
+  if(changed) scheduleSettingsPush();
+  return changed;
+}
+// Aparelho que já tinha config personalizada não tem carimbo algum: sem isto o valor escolhido
+// empataria com o padrão do outro device e o merge não saberia quem vence. Carimba só o que
+// difere do padrão — quem está todo no padrão não carimba nada e nunca sobrescreve o outro.
+function seedSettingsMeta(){
+  if(state.settingsMetaSeeded) return;
+  if(!state.settingsMeta) state.settingsMeta={};
+  const now=Date.now();
+  for(const k of SYNCED_SETTINGS){
+    if(state.settingsMeta[k]) continue;
+    if(JSON.stringify(state[k]??null)!==JSON.stringify(defaultState[k]??null)) state.settingsMeta[k]=now;
+  }
+  state.settingsMetaSeeded=true; saveState();
+}
+function buildSettingsPayload(){
+  const values={},meta={};
+  for(const k of SYNCED_SETTINGS){ values[k]=state[k]??null; if(state.settingsMeta&&state.settingsMeta[k]) meta[k]=state.settingsMeta[k]; }
+  return {v:1,values,meta};
+}
+// Vence o carimbo mais novo, chave a chave. Empate ou remoto sem carimbo → o local fica.
+function mergeRemoteSettings(remote){
+  if(!remote||typeof remote!=='object') return false;
+  const rv=remote.values||{},rm=remote.meta||{};
+  if(!state.settingsMeta) state.settingsMeta={};
+  let touched=false;
+  for(const k of SYNCED_SETTINGS){
+    if(!(k in rv)) continue;
+    if((rm[k]||0)<=(state.settingsMeta[k]||0)) continue;
+    state[k]=rv[k]; state.settingsMeta[k]=rm[k]; touched=true;
+  }
+  // Valor veio do remoto: refotografa para o diff não confundir com edição local e recarimbar.
+  if(touched) _settingsSnapshot=_snapSettings();
+  return touched;
+}
+function scheduleSettingsPush(){
+  if(_settingsPushTimer) clearTimeout(_settingsPushTimer);
+  _settingsPushTimer=setTimeout(()=>{_settingsPushTimer=null;pushSettingsToSupabase();},800);
+}
+async function pushSettingsToSupabase(){
+  if(!supabaseClient||!state.familyId||_settingsColumnMissing) return;
+  try{
+    const {error}=await supabaseClient.from('families').update({settings:buildSettingsPayload()}).eq('id',state.familyId);
+    if(error) throw error;
+  }catch(e){
+    if(/settings/i.test(e&&e.message||'')){ _settingsColumnMissing=true; console.warn('[Settings] coluna `settings` ausente no Supabase — configurações seguem locais até o ALTER TABLE'); return; }
+    console.warn('[Settings] push',e);
+  }
+}
+// Pull → merge → push do resultado: sem o push final, uma config mais nova neste aparelho só
+// chegaria à nuvem no próximo save manual.
+async function syncSettingsWithSupabase(){
+  if(!supabaseClient||!state.familyId||_settingsColumnMissing) return false;
+  const {data,error}=await supabaseClient.from('families').select('settings').eq('id',state.familyId).maybeSingle();
+  if(error){
+    if(/settings/i.test(error.message||'')){ _settingsColumnMissing=true; console.warn('[Settings] coluna `settings` ausente no Supabase — configurações seguem locais até o ALTER TABLE'); return false; }
+    throw error;
+  }
+  // Linha antiga, sem config na nuvem: não sobrescreve o local com vazio.
+  const touched=data&&data.settings?mergeRemoteSettings(data.settings):false;
+  if(touched) saveState();
+  await pushSettingsToSupabase();
+  return touched;
+}
+
+function saveState(){try{stampSettingChanges();localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(e){console.error('[App] saveState',e);} }
 function $(sel,root=document){return root.querySelector(sel);} 
 function $all(sel,root=document){return [...root.querySelectorAll(sel)];}
 function toast(msg,kind='info'){
@@ -2285,6 +2375,7 @@ async function forceSyncAll(){
   if(!supabaseClient||!state.familyId) return toast('Configure o Supabase primeiro','error');
   const st=$('#maintenanceStatus'); if(st) st.textContent='Sincronizando...';
   try{
+    await syncSettingsWithSupabase().catch(()=>{});
     await loadChildrenFromSupabase();
     await loadTasksFromSupabase();
     if(getWeekRange().start===getTodayISO()) await reArchivePrevWeekFromSupabase().catch(()=>{});
@@ -3467,7 +3558,7 @@ function bindEvents(){
     saveSupabaseConfig(url,anon); initSupabaseClient();
     if(supabaseClient){
       try{ if(!state.familyId) await loadFamilyFromSupabase().catch(()=>{});
-        if(state.familyId){ await loadChildrenFromSupabase().catch(()=>{}); await loadTasksFromSupabase().catch(()=>{}); await loadTaskInstancesFromSupabase().catch(()=>{}); await loadGoalsFromSupabase().catch(()=>{}); }
+        if(state.familyId){ await syncSettingsWithSupabase().catch(()=>{}); await loadChildrenFromSupabase().catch(()=>{}); await loadTasksFromSupabase().catch(()=>{}); await loadTaskInstancesFromSupabase().catch(()=>{}); await loadGoalsFromSupabase().catch(()=>{}); }
         ensureInstancesForToday(); setCloudStatus('connected','Supabase conectado'); toast('Supabase conectado','ok');
       }catch(e){ setCloudStatus('error','Erro ao sincronizar'); toast('Erro ao sincronizar','error'); }
     }
@@ -3477,7 +3568,7 @@ function bindEvents(){
   // family/children
   $('#familyCreateBtn').addEventListener('click', async ()=>{ try{ await createFamilyOnly(); toast('Família criada','ok'); }catch(e){ toast('Erro ao criar família','error'); } renderAll(); });
   $('#loadFamilyBtn').addEventListener('click', async ()=>{ if(!supabaseClient) return toast('Configure o Supabase','error');
-    try{ await loadFamilyFromSupabase(); await loadChildrenFromSupabase(); await loadTasksFromSupabase(); await loadTaskInstancesFromSupabase(); ensureInstancesForToday(); setupRealtime(); toast('Família carregada','ok'); }
+    try{ await loadFamilyFromSupabase(); await syncSettingsWithSupabase().catch(()=>{}); await loadChildrenFromSupabase(); await loadTasksFromSupabase(); await loadTaskInstancesFromSupabase(); ensureInstancesForToday(); setupRealtime(); toast('Família carregada','ok'); }
     catch(e){ toast('Erro ao buscar família','error'); }
     renderAll();
   });
@@ -3500,6 +3591,7 @@ function init(){
   populateIconSelect(document.getElementById('editIcon'), TASK_ICON_OPTIONS, '📌');
   populateIconSelect(document.getElementById('newGoalIcon'), GOAL_ICON_OPTIONS, '🎯');
   fixHistoryMoneyBRL(); // corrige entradas salvas com fórmula errada para 'Ambos'
+  seedSettingsMeta();   // carimba a config personalizada de antes do sync (só o que difere do padrão)
   showMode('child');
   setParentTab('approvals');
   bindEvents();
@@ -3511,6 +3603,7 @@ function init(){
     try{
       if(!state.familyId) await loadFamilyFromSupabase().catch(()=>{});
       if(state.familyId){
+        await syncSettingsWithSupabase().catch(()=>{});
         await loadChildrenFromSupabase().catch(()=>{});
         await loadTasksFromSupabase().catch(()=>{});
         // Na virada de semana (domingo), recarrega semana anterior para garantir arquivo completo
