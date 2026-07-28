@@ -1,0 +1,23 @@
+name: Smoke (§35)
+on:
+  push:
+    branches: [master]
+    paths-ignore: ['stats.json']   # commit diário de stats não roda o smoke
+  pull_request:
+  workflow_dispatch:
+permissions: { contents: read }
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      # --no-save --no-package-lock: o repo fica SEM package.json de propósito (r33 — node_modules
+      # e lockfile em pasta do OneDrive travam o sync da máquina inteira). A dependência do teste
+      # vive só aqui, no runner descartável.
+      - name: Instalar jsdom
+        run: npm install --no-save --no-package-lock jsdom
+      - name: Smoke §35 (2 devices contra um Supabase falso)
+        run: node tests/smoke.js
+        env: { CI: 'true' }

@@ -61,6 +61,12 @@
   /* Tabelas → scroll horizontal */
   .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
   .table{min-width:520px}
+  /* Cabem poucas colunas no celular e a tabela abre encostada à esquerda: a última ("Ações")
+     nasce fora da tela e, sem sinal visível, o usuário conclui que os botões não existem.
+     A sombra fica na CASCA (fora do container que rola) senão ela rolaria junto. */
+  .table-scroll{position:relative}
+  .table-scroll::after{content:"";position:absolute;top:0;right:0;bottom:0;width:26px;pointer-events:none;opacity:0;transition:opacity .18s ease;background:linear-gradient(90deg,rgba(15,23,42,0),rgba(15,23,42,.16))}
+  .table-scroll.can-scroll::after{opacity:1}
   /* Modais */
   .modal{border-radius:var(--r-card) var(--r-card) 0 0;max-height:90vh;overflow-y:auto}
   .overlay{align-items:flex-end;padding:0}
@@ -193,6 +199,9 @@
 .input{height:var(--hit);border-radius:var(--r-btn);border:1px solid var(--hairline-strong);padding:0 14px;font-size:16px;outline:none;background:#fff}
 .input:focus{border:2px solid var(--primary)}
 .hidden{display:none!important}
+/* O atributo `hidden` do HTML vale só `display:none` de user-agent, então QUALQUER classe com
+   display de autor (.card{display:flex} etc.) o derrota — o JS "esconde" e nada muda na tela. */
+[hidden]{display:none!important}
 .day-btn{height:34px;min-width:42px;border-radius:8px;border:1px solid var(--hairline-strong);background:#fff;font-size:12px;font-weight:500;cursor:pointer;color:var(--slate);padding:0 8px;transition:background .12s,color .12s,border-color .12s}
 .day-btn.on{background:var(--primary);color:#fff;border-color:var(--primary)}
 .day-preset{height:30px;padding:0 10px;border-radius:var(--r-pill);border:1px solid var(--hairline);background:var(--surface);font-size:12px;cursor:pointer;color:var(--slate)}
@@ -372,7 +381,7 @@
       <section class="card" id="panelApprovals">
         <div class="hd"><h2>Aprovações do dia</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><div class="meta">clique em ★ para aprovar com 1–5 estrelas</div><button onclick="approveAll()" class="btn btn-primary" type="button" style="height:30px;font-size:12px;padding:0 12px;white-space:nowrap">✅ Aprovar todas</button></div></div>
         <div class="bd">
-          <div class="table-wrap"><table class="table"><thead><tr><th>Tarefa</th><th>⭐</th><th>Tempo</th><th>Status</th><th>Ações</th></tr></thead><tbody id="approvalsBody"></tbody></table></div>
+          <div class="table-scroll"><div class="table-wrap"><table class="table"><thead><tr><th>Tarefa</th><th>⭐</th><th>Tempo</th><th>Status</th><th>Ações</th></tr></thead><tbody id="approvalsBody"></tbody></table></div></div>
         </div>
       </section>
 
@@ -452,7 +461,7 @@
               </div>
             </div>
           </form>
-          <div class="table-wrap"><table class="table"><thead><tr><th style="width:36px"></th><th>Ícone</th><th>Tarefa</th><th>⭐</th><th>Dias</th><th>Tipo</th><th>Ações</th></tr></thead><tbody id="tasksBody"></tbody></table></div>
+          <div class="table-scroll"><div class="table-wrap"><table class="table"><thead><tr><th style="width:36px"></th><th>Ícone</th><th>Tarefa</th><th>⭐</th><th>Dias</th><th>Tipo</th><th>Ações</th></tr></thead><tbody id="tasksBody"></tbody></table></div></div>
         </div>
       </section>
 
@@ -1206,11 +1215,29 @@ function instancesForChild(cid){
 // chaves do Supabase. Formato versionado {v,values,meta}: `meta` guarda o carimbo POR CHAVE, para
 // que um aparelho que nunca mexeu numa config não empurre o próprio padrão por cima do outro.
 const SYNCED_SETTINGS=['pointValueBRL','weekMode','showMoneyToChild','levelThresholds','childGender','childPixKeys','parentPin','parentPinEnabled'];
+// Mapas por criança são COLEÇÃO, não valor único: o merge une por id e carimba por ENTRADA.
+// Substituir o mapa inteiro (last-write-wins) apaga em silêncio a criança que só o outro aparelho
+// conhecia — o PC configura a Ana, o celular (que ainda não puxou) configura o Bruno e publica
+// {bruno}, e a Ana some no pull seguinte. Sem tombstone porque o app não remove criança; se um dia
+// remover, a exclusão precisa de carimbo próprio para não ser ressuscitada pelo outro aparelho.
+const MAP_SETTINGS=new Set(['childGender','childPixKeys']);
 let _settingsPushTimer=null;
 // Supabase sem o ALTER TABLE: degrada para local-only em vez de derrubar o resto do sync.
 let _settingsColumnMissing=false;
 function _snapSettings(){const s={};for(const k of SYNCED_SETTINGS) s[k]=JSON.stringify(state[k]??null);return s;}
 let _settingsSnapshot=_snapSettings();
+function _mapOf(v){ return (v&&typeof v==='object'&&!Array.isArray(v))?v:{}; }
+// Carimbo de UMA entrada. Aceita o formato antigo (número solto = mapa inteiro carimbado ali),
+// que é o que chega de um aparelho ainda na versão anterior.
+function _entryStamp(meta,id){ if(meta&&typeof meta==='object') return meta[id]||0; return typeof meta==='number'?meta:0; }
+// Carimbo por entrada do mapa local, convertendo o formato antigo na primeira passagem.
+function _mapMeta(k){
+  const raw=state.settingsMeta?state.settingsMeta[k]:null;
+  if(raw&&typeof raw==='object') return {...raw};
+  const out={};
+  if(typeof raw==='number'&&raw>0) for(const id of Object.keys(_mapOf(state[k]))) out[id]=raw;
+  return out;
+}
 
 // Carimba por chave o que mudou desde a última passagem. Por diff (e não em cada setter) para
 // cobrir todo ponto de escrita, inclusive os que vierem depois.
@@ -1220,7 +1247,18 @@ function stampSettingChanges(){
   for(const k of SYNCED_SETTINGS){
     const cur=JSON.stringify(state[k]??null);
     if(_settingsSnapshot[k]===cur) continue;
-    _settingsSnapshot[k]=cur; state.settingsMeta[k]=now; changed=true;
+    if(MAP_SETTINGS.has(k)){
+      // Carimba só as entradas que mudaram: as demais mantêm o carimbo antigo e continuam
+      // disputando o merge pelo próprio mérito, em vez de pegar carona nesta escrita.
+      let prev={}; try{ prev=_mapOf(JSON.parse(_settingsSnapshot[k]||'null')); }catch(e){}
+      const curMap=_mapOf(state[k]), meta=_mapMeta(k);
+      for(const id of new Set([...Object.keys(prev),...Object.keys(curMap)])){
+        if(JSON.stringify(prev[id]??null)===JSON.stringify(curMap[id]??null)) continue;
+        meta[id]=now;
+      }
+      state.settingsMeta[k]=meta;
+    } else state.settingsMeta[k]=now;
+    _settingsSnapshot[k]=cur; changed=true;
   }
   if(changed) scheduleSettingsPush();
   return changed;
@@ -1233,6 +1271,13 @@ function seedSettingsMeta(){
   if(!state.settingsMeta) state.settingsMeta={};
   const now=Date.now();
   for(const k of SYNCED_SETTINGS){
+    if(MAP_SETTINGS.has(k)){
+      // O mapa nasce vazio no padrão: toda entrada que existe aqui foi configurada por alguém.
+      const meta=_mapMeta(k);
+      for(const id of Object.keys(_mapOf(state[k]))) if(!meta[id]) meta[id]=now;
+      if(Object.keys(meta).length) state.settingsMeta[k]=meta;
+      continue;
+    }
     if(state.settingsMeta[k]) continue;
     if(JSON.stringify(state[k]??null)!==JSON.stringify(defaultState[k]??null)) state.settingsMeta[k]=now;
   }
@@ -1240,10 +1285,16 @@ function seedSettingsMeta(){
 }
 function buildSettingsPayload(){
   const values={},meta={};
-  for(const k of SYNCED_SETTINGS){ values[k]=state[k]??null; if(state.settingsMeta&&state.settingsMeta[k]) meta[k]=state.settingsMeta[k]; }
-  return {v:1,values,meta};
+  for(const k of SYNCED_SETTINGS){
+    values[k]=state[k]??null;
+    if(MAP_SETTINGS.has(k)){ const m=_mapMeta(k); if(Object.keys(m).length) meta[k]=m; }
+    else if(state.settingsMeta&&state.settingsMeta[k]) meta[k]=state.settingsMeta[k];
+  }
+  return {v:2,values,meta};
 }
 // Vence o carimbo mais novo, chave a chave. Empate ou remoto sem carimbo → o local fica.
+// Mapa por criança não é substituído: une-se por id, entrada a entrada (a ausência de uma
+// entrada no remoto NUNCA apaga a local — é o que fazia a config de uma criança sumir).
 function mergeRemoteSettings(remote){
   if(!remote||typeof remote!=='object') return false;
   const rv=remote.values||{},rm=remote.meta||{};
@@ -1251,6 +1302,18 @@ function mergeRemoteSettings(remote){
   let touched=false;
   for(const k of SYNCED_SETTINGS){
     if(!(k in rv)) continue;
+    if(MAP_SETTINGS.has(k)){
+      const rmap=_mapOf(rv[k]), lmap={..._mapOf(state[k])}, meta=_mapMeta(k);
+      let hit=false;
+      for(const id of Object.keys(rmap)){
+        const rts=_entryStamp(rm[k],id);
+        if(rts<=(meta[id]||0)) continue;
+        lmap[id]=rmap[id]; meta[id]=rts; hit=true;
+      }
+      state.settingsMeta[k]=meta; // também normaliza o formato antigo (carimbo escalar)
+      if(hit){ state[k]=lmap; touched=true; }
+      continue;
+    }
     if((rm[k]||0)<=(state.settingsMeta[k]||0)) continue;
     state[k]=rv[k]; state.settingsMeta[k]=rm[k]; touched=true;
   }
@@ -1262,30 +1325,41 @@ function scheduleSettingsPush(){
   if(_settingsPushTimer) clearTimeout(_settingsPushTimer);
   _settingsPushTimer=setTimeout(()=>{_settingsPushTimer=null;pushSettingsToSupabase();},800);
 }
+// undefined = coluna ausente (degrada para local-only) · null = linha sem config na nuvem
+async function _fetchRemoteSettings(){
+  const {data,error}=await supabaseClient.from('families').select('settings').eq('id',state.familyId).maybeSingle();
+  if(error){
+    if(/settings/i.test(error.message||'')){ _settingsColumnMissing=true; console.warn('[Settings] coluna `settings` ausente no Supabase — configurações seguem locais até o ALTER TABLE'); return undefined; }
+    throw error;
+  }
+  return data&&data.settings?data.settings:null;
+}
+// Ler → fundir → gravar. É o ÚNICO caminho de escrita, e é ler-antes-de-gravar de propósito: o
+// blob `settings` é UM só para a família inteira, então um update cego publicaria o mapa parcial
+// deste aparelho por cima do que o outro acabou de criar — desfazendo na nuvem justamente o que a
+// união por id do merge existe para proteger. Sem o gravar final, uma config mais nova aqui só
+// chegaria à nuvem no próximo save manual.
+async function _syncSettingsReadWrite(){
+  const remote=await _fetchRemoteSettings();
+  if(remote===undefined) return false;
+  const touched=remote?mergeRemoteSettings(remote):false;
+  if(touched) saveState();
+  const {error}=await supabaseClient.from('families').update({settings:buildSettingsPayload()}).eq('id',state.familyId);
+  if(error) throw error;
+  return touched;
+}
 async function pushSettingsToSupabase(){
   if(!supabaseClient||!state.familyId||_settingsColumnMissing) return;
   try{
-    const {error}=await supabaseClient.from('families').update({settings:buildSettingsPayload()}).eq('id',state.familyId);
-    if(error) throw error;
+    await _syncSettingsReadWrite();
   }catch(e){
     if(/settings/i.test(e&&e.message||'')){ _settingsColumnMissing=true; console.warn('[Settings] coluna `settings` ausente no Supabase — configurações seguem locais até o ALTER TABLE'); return; }
     console.warn('[Settings] push',e);
   }
 }
-// Pull → merge → push do resultado: sem o push final, uma config mais nova neste aparelho só
-// chegaria à nuvem no próximo save manual.
 async function syncSettingsWithSupabase(){
   if(!supabaseClient||!state.familyId||_settingsColumnMissing) return false;
-  const {data,error}=await supabaseClient.from('families').select('settings').eq('id',state.familyId).maybeSingle();
-  if(error){
-    if(/settings/i.test(error.message||'')){ _settingsColumnMissing=true; console.warn('[Settings] coluna `settings` ausente no Supabase — configurações seguem locais até o ALTER TABLE'); return false; }
-    throw error;
-  }
-  // Linha antiga, sem config na nuvem: não sobrescreve o local com vazio.
-  const touched=data&&data.settings?mergeRemoteSettings(data.settings):false;
-  if(touched) saveState();
-  await pushSettingsToSupabase();
-  return touched;
+  return await _syncSettingsReadWrite();
 }
 
 function saveState(){try{stampSettingChanges();localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(e){console.error('[App] saveState',e);} }
@@ -3142,12 +3216,13 @@ async function importBackup(file){
     if(!data||typeof data!=='object') throw new Error('Arquivo inválido');
     const fields=['tasks','instances','goals','weekHistory','goalsHistory','taskOrder','familyId','familyName','childId','childrenList','pointValueBRL','showMoneyToChild','weekMode','levelThresholds','childGender','childPixKeys','parentPin','parentPinEnabled','lastWeekStart','totalGoalStars'];
     const arrayFields=new Set(['tasks','instances','goals','weekHistory','goalsHistory','taskOrder','childrenList']);
-    // Mapas por id da criança: um valor não-objeto aqui faria os setters (setChildGender/saveChildPixKey)
-    // falharem em silêncio — atribuir propriedade a um primitivo é no-op fora do modo estrito.
-    const mapFields=new Set(['childGender','childPixKeys']);
+    // Mapas por id da criança (MAP_SETTINGS, a mesma lista que o sync usa — duas listas separadas
+    // envelheceriam desencontradas): um valor não-objeto aqui faria os setters (setChildGender/
+    // saveChildPixKey) falharem em silêncio, porque atribuir propriedade a um primitivo é no-op
+    // fora do modo estrito.
     fields.forEach(k=>{ if(data[k]===undefined) return;
       if(arrayFields.has(k) && !Array.isArray(data[k])) return;
-      if(mapFields.has(k) && (typeof data[k]!=='object' || data[k]===null || Array.isArray(data[k]))) return;
+      if(MAP_SETTINGS.has(k) && (typeof data[k]!=='object' || data[k]===null || Array.isArray(data[k]))) return;
       state[k]=data[k]; });
     // O saveState abaixo recarimba por diff as configs restauradas (hora atual), então a restauração
     // vence a nuvem no próximo merge em vez de ser reapagada por ela.
@@ -3332,9 +3407,23 @@ function initTaskDragDrop(){
   });
 }
 
-function renderAll(){ ensureInstancesForToday(); renderChild(); renderParent(); initTaskDragDrop(); }
+// Sombra de "tem mais coluna aí" nas tabelas roláveis: só enquanto sobrar coluna escondida à
+// direita — muda com o conteúdo, com o scroll e com o tamanho da janela, então recalcula nos três.
+function updateTableScrollHints(){
+  $all('.table-scroll').forEach(host=>{
+    const w=host.querySelector('.table-wrap'); if(!w) return;
+    host.classList.toggle('can-scroll',(w.scrollWidth-w.clientWidth-w.scrollLeft)>4);
+  });
+}
+function bindTableScrollHints(){
+  $all('.table-scroll .table-wrap').forEach(w=>w.addEventListener('scroll',updateTableScrollHints,{passive:true}));
+  window.addEventListener('resize',updateTableScrollHints);
+}
+
+function renderAll(){ ensureInstancesForToday(); renderChild(); renderParent(); initTaskDragDrop(); updateTableScrollHints(); }
 
 function bindEvents(){
+  bindTableScrollHints();
   // top
   $('#btnChild').addEventListener('click', ()=>{ showMode('child'); renderAll(); });
   $('#btnParent').addEventListener('click', openPinModal);
