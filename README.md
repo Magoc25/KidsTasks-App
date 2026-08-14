@@ -23,6 +23,8 @@ O app já está publicado online. Clique e use:
 
 Funciona em qualquer navegador moderno (Chrome, Edge, Firefox, Safari) — no celular, tablet ou computador. **Não precisa de cadastro, login, conta GitHub ou download de arquivos.** Após o primeiro acesso, o app funciona **offline**. Seus dados ficam **somente no seu dispositivo** (no armazenamento do próprio navegador).
 
+Quer entender como o app funciona por dentro antes de usar? **[📖 Página de apresentação](https://magoc25.github.io/KidsTasks-App/apresentacao.html)** — o que ele faz, onde seus dados moram, o que sai do aparelho e o que ele ainda não faz bem, em linguagem corrente (com um modo técnico para quem quiser o detalhe).
+
 ### 📱 Instalar como app no seu dispositivo
 
 Depois de abrir a URL acima, você pode instalar como aplicativo nativo, com ícone na tela inicial / área de trabalho:
@@ -68,9 +70,10 @@ Se você veio aqui só para **usar o app**, pode ignorar a grande maioria dos ar
 
 Para você, basta clicar na URL pública da seção [▶ Abrir agora](#-abrir-agora--sem-baixar-nada). Tudo o que importa é:
 
-| Arquivo principal | URL para usar |
-|---|---|
-| `KidsTasks.html` | [magoc25.github.io/KidsTasks-App/KidsTasks.html](https://magoc25.github.io/KidsTasks-App/KidsTasks.html) |
+| Arquivo | O que é | URL |
+|---|---|---|
+| `KidsTasks.html` | O app inteiro — é o único arquivo que você precisa | [magoc25.github.io/KidsTasks-App/KidsTasks.html](https://magoc25.github.io/KidsTasks-App/KidsTasks.html) |
+| `apresentacao.html` | Página de apresentação: como funciona, onde ficam os dados, limitações | [magoc25.github.io/KidsTasks-App/apresentacao.html](https://magoc25.github.io/KidsTasks-App/apresentacao.html) |
 
 ---
 

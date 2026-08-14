@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self';">
+<title>KidsTasks — como funciona por dentro</title>
+<meta name="description" content="Tarefas e mesada para crianças, com aprovação por estrelas. Sem cadastro, sem anúncios, com todos os dados no seu aparelho. Como o app funciona, o que sai do dispositivo e o que ele não faz.">
+<meta name="theme-color" content="#fbfaff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131120" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="KidsTasks — como funciona por dentro">
+<meta property="og:description" content="Tarefas e mesada para crianças, com aprovação por estrelas. Sem cadastro, sem anúncios, com todos os dados no seu aparelho.">
+<meta property="og:url" content="https://magoc25.github.io/KidsTasks-App/apresentacao.html">
+<meta property="og:image" content="https://magoc25.github.io/KidsTasks-App/icon-512.png">
+<meta property="og:locale" content="pt_BR">
+<meta name="twitter:card" content="summary">
+<style>
+/* ── Tokens ────────────────────────────────────────────────────────────────
+   Paleta clara COMPLETA no :root puro. O escuro redefine só os tokens, nas
+   duas formas: preferência do sistema e escolha explícita. Nenhuma cor tem
+   sua única definição dentro de @media — no estado "sistema" nada é carimbado
+   no documento, e uma cor definida só ali nunca se aplicaria. */
+:root{
+  --paper:#fbfaff; --band:#f2f0fa; --surface:#f7f6fd;
+  --ink:#16141f; --muted:#54506a; --faint:#8a84a3;
+  --rule:rgba(22,20,31,.17); --rule-soft:rgba(22,20,31,.075);
+  --accent:#6e56cf; --accent-dim:#8b78dd; --warn:#a8560c;
+  --shadow:rgba(22,20,31,.07);
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#131120; --band:#191627; --surface:#1e1b2e;
+    --ink:#ece9f7; --muted:#a9a3c1; --faint:#7b7597;
+    --rule:rgba(236,233,247,.22); --rule-soft:rgba(236,233,247,.10);
+    --accent:#a692f5; --accent-dim:#8b78dd; --warn:#e5a45c;
+    --shadow:rgba(0,0,0,.45);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#131120; --band:#191627; --surface:#1e1b2e;
+  --ink:#ece9f7; --muted:#a9a3c1; --faint:#7b7597;
+  --rule:rgba(236,233,247,.22); --rule-soft:rgba(236,233,247,.10);
+  --accent:#a692f5; --accent-dim:#8b78dd; --warn:#e5a45c;
+  --shadow:rgba(0,0,0,.45);
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--sans); font-size:17px; line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:var(--accent); color:var(--paper)}
+
+/* ── Grade: coluna de texto ~66ch + coluna de margem à esquerda ─────────── */
+.wrap{max-width:1180px; margin:0 auto; padding:0 24px}
+.grid{display:grid; grid-template-columns:1fr; gap:0}
+@media (min-width:1000px){
+  .grid{grid-template-columns:190px minmax(0,66ch); gap:0 48px; justify-content:center}
+}
+.side{}
+@media (min-width:1000px){
+  .side{text-align:right; padding-top:.35em; position:sticky; top:24px; align-self:start}
+}
+.side .num{font-family:var(--mono); font-size:12px; letter-spacing:.14em; color:var(--accent); display:block}
+.side .note{font-size:13.5px; line-height:1.5; color:var(--faint); margin-top:8px; display:none}
+@media (min-width:1000px){ .side .note{display:block} }
+
+/* ── Tipografia: display serifada · corpo sans · dados monoespaçados ────── */
+h1,h2,h3{font-family:var(--serif); font-weight:600; line-height:1.18; letter-spacing:-.01em; font-variant-numeric:oldstyle-nums}
+h1{font-size:clamp(2.4rem,6vw,3.6rem); margin:0 0 .3em}
+h2{font-size:clamp(1.55rem,3.4vw,2.05rem); margin:0 0 .55em}
+h3{font-size:1.12rem; margin:2.1em 0 .5em; font-family:var(--sans); font-weight:650; letter-spacing:0}
+p{margin:0 0 1.1em}
+a{color:var(--accent); text-underline-offset:3px; text-decoration-thickness:1px}
+a:hover{text-decoration-thickness:2px}
+strong{font-weight:650}
+code,.num,.data{font-family:var(--mono); font-variant-numeric:tabular-nums}
+code{font-size:.88em; background:var(--surface); border:1px solid var(--rule-soft); border-radius:5px; padding:.1em .38em}
+
+/* ── Cabeçalho ─────────────────────────────────────────────────────────── */
+header{border-bottom:1px solid var(--rule); background:var(--band)}
+.hero{padding:56px 0 40px}
+.eyebrow{font-family:var(--mono); font-size:12.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); margin:0 0 18px}
+.lede{font-size:clamp(1.12rem,2.3vw,1.3rem); color:var(--muted); max-width:60ch; margin:0 0 28px}
+.facts{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 30px; padding:0; list-style:none}
+.facts li{
+  font-family:var(--mono); font-size:12.5px; letter-spacing:.03em;
+  border:1px solid var(--rule); border-radius:999px; padding:5px 13px; color:var(--muted);
+  background:var(--paper);
+}
+.actions{display:flex; flex-wrap:wrap; gap:12px; align-items:center}
+.btn{
+  display:inline-block; font:inherit; font-size:15.5px; font-weight:600;
+  border:1px solid var(--accent); border-radius:9px; padding:11px 20px;
+  background:var(--accent); color:var(--paper); text-decoration:none; cursor:pointer;
+}
+.btn:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent; color:var(--accent)}
+
+/* ── Interruptor simples ⇄ técnico ─────────────────────────────────────── */
+.switch{display:flex; align-items:center; gap:0; border:1px solid var(--rule); border-radius:9px; overflow:hidden; background:var(--paper)}
+.switch button{
+  font:inherit; font-size:14px; font-weight:600; border:0; background:transparent;
+  color:var(--muted); padding:10px 16px; cursor:pointer;
+}
+.switch button[aria-pressed="true"]{background:var(--accent); color:var(--paper)}
+.switch button:focus-visible{outline:2px solid var(--accent); outline-offset:-2px}
+.switch-hint{font-size:13.5px; color:var(--faint); max-width:34ch; line-height:1.45}
+
+/* ── Seções ────────────────────────────────────────────────────────────── */
+section{padding:52px 0; border-bottom:1px solid var(--rule-soft)}
+section:nth-of-type(even){background:var(--band)}
+.kicker{font-family:var(--mono); font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--accent); margin:0 0 10px}
+@media (min-width:1000px){ .kicker{display:none} }
+
+/* ── Ficha técnica ─────────────────────────────────────────────────────── */
+.tech{
+  border-left:3px solid var(--accent); background:var(--surface);
+  padding:18px 20px; margin:1.5em 0; border-radius:0 9px 9px 0;
+  font-size:15.5px; line-height:1.6;
+}
+.tech > :last-child{margin-bottom:0}
+.tech .tag{
+  display:inline-block; font-family:var(--mono); font-size:11px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--accent); margin:0 0 8px;
+}
+#page[data-mode="simples"] .tech{display:none}
+
+/* ── Listas, tabelas, figuras ──────────────────────────────────────────── */
+ul.clean{list-style:none; padding:0; margin:0 0 1.2em}
+ul.clean li{padding:11px 0 11px 26px; border-bottom:1px solid var(--rule-soft); position:relative}
+ul.clean li:last-child{border-bottom:0}
+ul.clean li::before{content:"›"; position:absolute; left:6px; color:var(--accent); font-weight:700}
+.scroller{overflow-x:auto; margin:1.4em 0; border:1px solid var(--rule-soft); border-radius:10px; background:var(--paper)}
+table{border-collapse:collapse; width:100%; min-width:520px; font-size:15px}
+th,td{text-align:left; padding:11px 14px; border-bottom:1px solid var(--rule-soft); vertical-align:top}
+th{font-size:12.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); font-weight:650}
+tr:last-child td{border-bottom:0}
+figure{margin:1.8em 0}
+figure svg{display:block; width:100%; height:auto; color:var(--ink)}
+figcaption{font-size:13.5px; color:var(--faint); margin-top:12px; line-height:1.5}
+.diagram{overflow-x:auto; border:1px solid var(--rule-soft); border-radius:12px; background:var(--paper); padding:20px}
+.callout{
+  border:1px solid var(--rule); border-left:3px solid var(--warn);
+  background:var(--surface); padding:18px 20px; border-radius:0 9px 9px 0; margin:1.5em 0; font-size:16px;
+}
+.callout > :last-child{margin-bottom:0}
+.callout .tag{display:inline-block; font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--warn); margin:0 0 8px}
+
+footer{padding:44px 0 60px; color:var(--faint); font-size:14.5px}
+footer a{color:var(--muted)}
+.skip{position:absolute; left:-9999px}
+.skip:focus{left:16px; top:16px; background:var(--accent); color:var(--paper); padding:10px 16px; border-radius:8px; z-index:9}
+</style>
+</head>
+<body>
+<a class="skip" href="#conteudo">Pular para o conteúdo</a>
+
+<div id="page" data-mode="simples">
+
+<header>
+  <div class="wrap hero">
+    <p class="eyebrow">MGC Dev · aplicativo gratuito</p>
+    <h1>KidsTasks</h1>
+    <p class="lede">
+      Um quadro de tarefas e mesada para a família: a criança marca o que fez, o responsável
+      aprova, as estrelas viram dinheiro no fim da semana. Sem cadastro, sem anúncios e com
+      todos os dados guardados no próprio aparelho.
+    </p>
+    <ul class="facts">
+      <li>1 arquivo</li>
+      <li>0 cadastros</li>
+      <li>0 anúncios</li>
+      <li>0 rastreadores</li>
+      <li>dados no seu aparelho</li>
+      <li>em desenvolvimento desde maio de 2026</li>
+    </ul>
+    <div class="actions">
+      <a class="btn" href="./KidsTasks.html">Abrir o app</a>
+      <div class="switch" role="group" aria-label="Profundidade da leitura">
+        <button type="button" id="btnSimples" aria-pressed="true">Simples</button>
+        <button type="button" id="btnTecnico" aria-pressed="false">Técnico</button>
+      </div>
+      <p class="switch-hint">No modo técnico aparecem fichas com o detalhe de engenharia de cada assunto.</p>
+    </div>
+  </div>
+</header>
+
+<main id="conteudo">
+
+<!-- ── 01 ─────────────────────────────────────────────────────────────── -->
+<section>
+  <div class="wrap grid">
+    <div class="side"><span class="num">01</span><p class="note">O problema que o app resolve.</p></div>
+    <div>
+      <p class="kicker">01 — O que é</p>
+      <h2>Combinar é fácil; lembrar do combinado é que não</h2>
+      <p>
+        Quase toda casa já tentou a mesma coisa: uma lista de tarefas na geladeira, um acordo de
+        mesada, e duas semanas depois ninguém lembra quem fez o quê. O KidsTasks existe para
+        segurar essa memória — e para deixar a conta visível para os dois lados.
+      </p>
+      <p>
+        A criança abre o app e vê as tarefas do dia. Marca o que fez. O responsável confere e
+        aprova, e só então as estrelas contam. No fim da semana o app fecha o período, converte as
+        estrelas em reais pelo valor que a família definiu e registra o pagamento.
+      </p>
+      <ul class="clean">
+        <li><strong>Aprovação de verdade.</strong> Marcar não é ganhar: cada tarefa passa pelo responsável antes de virar estrela.</li>
+        <li><strong>A semana fecha.</strong> O acerto é sempre de semana encerrada — a semana em curso aparece como “em andamento” e não pode ser paga por engano.</li>
+        <li><strong>Metas próprias.</strong> A criança junta estrelas para objetivos que ela mesma escolhe, com o progresso à vista.</li>
+        <li><strong>Uma trilha para avançar.</strong> Conforme as estrelas somam, a criança sobe de nível numa jornada com nomes, mascote e comemoração.</li>
+        <li><strong>Vários filhos, um app.</strong> Cada criança tem o próprio painel, as próprias tarefas e o próprio acerto.</li>
+      </ul>
+      <div class="tech">
+        <span class="tag">Ficha técnica</span>
+        <p>
+          O app é uma <strong>página única</strong>: um arquivo HTML com todo o programa dentro, sem
+          servidor de aplicação, sem processo de compilação e sem estrutura de pastas. Ele se instala
+          como aplicativo (PWA) e abre offline. Essa escolha é o que permite as três garantias da
+          página: não há para onde os dados irem sem que você configure, não há build capaz de
+          divergir do que está publicado, e qualquer pessoa consegue baixar o arquivo e ler o que ele
+          faz.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 02 ─────────────────────────────────────────────────────────────── -->
+<section>
+  <div class="wrap grid">
+    <div class="side"><span class="num">02</span><p class="note">Dois modos, uma tela.</p></div>
+    <div>
+      <p class="kicker">02 — No dia a dia</p>
+      <h2>Um app, dois pontos de vista</h2>
+      <p>
+        O mesmo arquivo atende a criança e o responsável, e a diferença entre eles é o que cada um
+        pode fazer. A criança marca tarefas, acompanha metas e vê a própria jornada. O responsável
+        aprova, cria e reordena tarefas, define o valor da estrela, acompanha o histórico das
+        semanas e registra os pagamentos.
+      </p>
+      <p>
+        A troca para o modo responsável é protegida por um PIN — pensado para impedir o clique
+        curioso, não para resistir a um adulto determinado. A seção de segurança explica exatamente
+        o que ele protege e o que não protege.
+      </p>
+      <h3>Dinheiro à vista, ou não</h3>
+      <p>
+        Nem toda família quer que a criança pequena veja valores em reais. Há uma opção que esconde
+        o dinheiro do painel infantil e mantém só as estrelas — a conta continua correta do lado do
+        responsável.
+      </p>
+      <div class="tech">
+        <span class="tag">Ficha técnica</span>
+        <p>
+          A opção de esconder valores vale para <strong>todos</strong> os pontos do painel infantil
+          que mostram dinheiro, incluindo o cofrinho da jornada de níveis — não só a linha principal.
+          Telas do responsável não são afetadas, por definição: quem as abre já passou pelo PIN.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 03 ─────────────────────────────────────────────────────────────── -->
+<section>
+  <div class="wrap grid">
+    <div class="side"><span class="num">03</span><p class="note">Três camadas — e um caminho que não existe.</p></div>
+    <div>
+      <p class="kicker">03 — Onde seus dados moram</p>
+      <h2>Os dados da sua família ficam com a sua família</h2>
+      <p>
+        Esta é a parte que mais importa num app usado por crianças, então vale ser literal. Os
+        nomes dos seus filhos, as tarefas, as estrelas, os valores e o histórico ficam gravados
+        <strong>no navegador do seu aparelho</strong>. Não existe conta, não existe login, e o
+        desenvolvedor não tem meio de ler esses dados — nem por engano, nem sob pedido.
+      </p>
+
+      <figure>
+        <div class="diagram">
+          <svg viewBox="0 0 720 330" role="img" aria-labelledby="d1t d1d">
+            <title id="d1t">As três camadas do KidsTasks</title>
+            <desc id="d1d">O aparelho guarda os dados da família. Uma seta opcional leva ao banco de dados do próprio usuário. Uma terceira caixa, da infraestrutura do desenvolvedor, recebe apenas contagem anônima, avaliações voluntárias e o número da versão. O caminho dos dados das crianças até o desenvolvedor está tracejado e marcado com um X: ele não existe.</desc>
+            <defs>
+              <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+              </marker>
+            </defs>
+            <g fill="none" stroke="currentColor" stroke-width="1.5">
+
+              <!-- Camada 2: aparelho -->
+              <rect x="16" y="96" width="196" height="132" rx="12" opacity=".9"/>
+              <text x="114" y="126" text-anchor="middle" font-size="15" font-weight="700" fill="currentColor" stroke="none">Seu aparelho</text>
+              <text x="114" y="150" text-anchor="middle" font-size="12.5" fill="currentColor" stroke="none" opacity=".72">crianças · tarefas</text>
+              <text x="114" y="168" text-anchor="middle" font-size="12.5" fill="currentColor" stroke="none" opacity=".72">estrelas · valores</text>
+              <text x="114" y="186" text-anchor="middle" font-size="12.5" fill="currentColor" stroke="none" opacity=".72">histórico · metas</text>
+              <text x="114" y="211" text-anchor="middle" font-size="11.5" font-family="ui-monospace,monospace" fill="currentColor" stroke="none" opacity=".55">tudo, por padrão</text>
+
+              <!-- Camada 3: banco do usuário -->
+              <rect x="262" y="96" width="196" height="132" rx="12" stroke-dasharray="5 4" opacity=".9"/>
+              <text x="360" y="126" text-anchor="middle" font-size="15" font-weight="700" fill="currentColor" stroke="none">Seu banco de dados</text>
+              <text x="360" y="150" text-anchor="middle" font-size="12.5" fill="currentColor" stroke="none" opacity=".72">conta que você cria,</text>
+              <text x="360" y="168" text-anchor="middle" font-size="12.5" fill="currentColor" stroke="none" opacity=".72">com senha que só</text>
+              <text x="360" y="186" text-anchor="middle" font-size="12.5" fill="currentColor" stroke="none" opacity=".72">você conhece</text>
+              <text x="360" y="211" text-anchor="middle" font-size="11.5" font-family="ui-monospace,monospace" fill="currentColor" stroke="none" opacity=".55">opcional</text>
+
+              <!-- Camada 1: infra do desenvolvedor -->
+              <rect x="508" y="96" width="196" height="132" rx="12" opacity=".9"/>
+              <text x="606" y="126" text-anchor="middle" font-size="15" font-weight="700" fill="currentColor" stroke="none">Infra do MGC Dev</text>
+              <text x="606" y="150" text-anchor="middle" font-size="12.5" fill="currentColor" stroke="none" opacity=".72">contagem anônima</text>
+              <text x="606" y="168" text-anchor="middle" font-size="12.5" fill="currentColor" stroke="none" opacity=".72">avaliações do app</text>
+              <text x="606" y="186" text-anchor="middle" font-size="12.5" fill="currentColor" stroke="none" opacity=".72">número da versão</text>
+              <text x="606" y="211" text-anchor="middle" font-size="11.5" font-family="ui-monospace,monospace" fill="currentColor" stroke="none" opacity=".55">nada de família</text>
+
+              <!-- seta aparelho -> banco do usuário -->
+              <path d="M214 146 L258 146" marker-end="url(#a1)"/>
+              <path d="M258 178 L214 178" marker-end="url(#a1)"/>
+
+              <!-- caminho inexistente -->
+              <path d="M214 286 L500 286" stroke-dasharray="7 6" opacity=".55" marker-end="url(#a1)"/>
+              <path d="M596 96 L596 60" opacity="0"/>
+              <g stroke-width="2.6" opacity=".95">
+                <path d="M345 274 L371 298"/>
+                <path d="M371 274 L345 298"/>
+              </g>
+            </g>
+            <text x="236" y="139" font-size="11.5" font-family="ui-monospace,monospace" fill="currentColor" opacity=".62" text-anchor="middle">envia</text>
+            <text x="236" y="196" font-size="11.5" font-family="ui-monospace,monospace" fill="currentColor" opacity=".62" text-anchor="middle">recebe</text>
+            <text x="358" y="322" font-size="12.5" fill="currentColor" opacity=".7" text-anchor="middle">dados das crianças → desenvolvedor: este caminho não existe</text>
+            <text x="606" y="286" font-size="11.5" font-family="ui-monospace,monospace" fill="currentColor" opacity=".6" text-anchor="middle">↑ só o que está listado</text>
+          </svg>
+        </div>
+        <figcaption>
+          A seta do meio é tracejada porque é opcional: sincronizar entre aparelhos só acontece se
+          você criar o próprio banco de dados. A seta de baixo está marcada com X porque não existe
+          no programa — não é uma promessa, é a ausência de um caminho.
+        </figcaption>
+      </figure>
+
+      <div class="tech">
+        <span class="tag">Ficha técnica</span>
+        <p>
+          O estado da família vive numa única entrada de <code>localStorage</code>, em JSON. Na
+          abertura, o app funde o que leu sobre a estrutura padrão e valida os campos que precisam
+          ser lista — é isso que faz um backup antigo continuar importável depois de o app ganhar
+          campos novos: o que falta vem do padrão, em vez de quebrar a leitura. Arquivo corrompido
+          ou ilegível degrada para o estado inicial em vez de derrubar o app.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 04 ─────────────────────────────────────────────────────────────── -->
+<section>
+  <div class="wrap grid">
+    <div class="side"><span class="num">04</span><p class="note">Dois aparelhos, sem sobrescrever ninguém.</p></div>
+    <div>
+      <p class="kicker">04 — Sincronizar (opcional)</p>
+      <h2>Se você quiser os mesmos dados no celular e no computador</h2>
+      <p>
+        Guardar tudo no aparelho tem um custo: o que você faz no computador não aparece no celular.
+        Quem quiser resolver isso cria uma conta gratuita num serviço de banco de dados, cola dois
+        endereços na configuração do app e pronto — os aparelhos passam a conversar por um banco
+        que é <strong>seu</strong>. O desenvolvedor não recebe essas credenciais e não tem acesso a
+        esse banco.
+      </p>
+      <p>
+        A parte difícil da sincronização não é enviar: é decidir quem ganha quando dois aparelhos
+        mudam coisas diferentes sem ter visto um ao outro. O caso que quebra apps ingênuos é este:
+        você configura uma criança no computador enquanto configura a outra no celular. Se o app
+        simplesmente mandar a sua versão para a nuvem, a configuração que só o outro aparelho
+        conhecia desaparece — e some dos dois.
+      </p>
+
+      <figure>
+        <div class="diagram">
+          <svg viewBox="0 0 720 300" role="img" aria-labelledby="d2t d2d">
+            <title id="d2t">Como dois aparelhos se fundem sem perder configuração</title>
+            <desc id="d2d">O computador configura a primeira criança e o celular configura a segunda, sem terem se visto. Antes de gravar, cada aparelho lê o que está na nuvem, une as duas contribuições por identificador e só então grava. O resultado guarda as duas.</desc>
+            <defs>
+              <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+              </marker>
+            </defs>
+            <g fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="16" y="26" width="180" height="76" rx="11"/>
+              <text x="106" y="54" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor" stroke="none">Computador</text>
+              <text x="106" y="78" text-anchor="middle" font-size="12.5" fill="currentColor" stroke="none" opacity=".72">configurou a Ana</text>
+
+              <rect x="16" y="196" width="180" height="76" rx="11"/>
+              <text x="106" y="224" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor" stroke="none">Celular</text>
+              <text x="106" y="248" text-anchor="middle" font-size="12.5" fill="currentColor" stroke="none" opacity=".72">configurou o Bruno</text>
+
+              <rect x="278" y="106" width="164" height="88" rx="11" stroke-dasharray="5 4"/>
+              <text x="360" y="136" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor" stroke="none">ler · unir · gravar</text>
+              <text x="360" y="158" text-anchor="middle" font-size="12" fill="currentColor" stroke="none" opacity=".72">une por identificador,</text>
+              <text x="360" y="176" text-anchor="middle" font-size="12" fill="currentColor" stroke="none" opacity=".72">com carimbo por entrada</text>
+
+              <rect x="524" y="106" width="180" height="88" rx="11"/>
+              <text x="614" y="140" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor" stroke="none">Seu banco</text>
+              <text x="614" y="164" text-anchor="middle" font-size="12.5" fill="currentColor" stroke="none" opacity=".72">Ana + Bruno</text>
+
+              <path d="M198 74 L272 118" marker-end="url(#a2)"/>
+              <path d="M198 224 L272 182" marker-end="url(#a2)"/>
+              <path d="M444 150 L518 150" marker-end="url(#a2)"/>
+              <path d="M524 194 C440 250 300 250 200 240" stroke-dasharray="6 5" opacity=".6" marker-end="url(#a2)"/>
+            </g>
+            <text x="222" y="86" font-size="11.5" font-family="ui-monospace,monospace" fill="currentColor" opacity=".62">envia só o que mudou</text>
+            <text x="222" y="214" font-size="11.5" font-family="ui-monospace,monospace" fill="currentColor" opacity=".62">envia só o que mudou</text>
+            <text x="481" y="141" font-size="11.5" font-family="ui-monospace,monospace" fill="currentColor" opacity=".62" text-anchor="middle">grava</text>
+            <text x="360" y="266" font-size="11.5" font-family="ui-monospace,monospace" fill="currentColor" opacity=".62" text-anchor="middle">volta completo para os dois</text>
+          </svg>
+        </div>
+        <figcaption>
+          A caixa do meio é a regra inteira: nenhum aparelho grava por cima do que não leu. A
+          ausência de uma informação nunca é interpretada como pedido para apagá-la.
+        </figcaption>
+      </figure>
+
+      <div class="tech">
+        <span class="tag">Ficha técnica</span>
+        <p>
+          As entidades da família — crianças, tarefas, marcações do dia, metas, pagamentos —
+          sincronizam <strong>linha a linha</strong>, então cada uma resolve o próprio conflito. As
+          preferências, porém, viajam juntas num único documento compartilhado pela família, e é aí
+          que mora a armadilha: gravar esse documento inteiro a partir do que este aparelho conhece
+          republica um recorte parcial por cima da nuvem.
+        </p>
+        <p>
+          Por isso a escrita é sempre <strong>ler, fundir e gravar</strong>, por um caminho único —
+          o envio automático e a sincronização de abertura chamam a mesma função, para não existir
+          uma segunda rota que grave às cegas. Preferências que são mapas (uma entrada por criança)
+          carregam <strong>carimbo de tempo por entrada</strong>, não um carimbo só para o mapa
+          inteiro; a fusão une por identificador e o valor mais recente vence, entrada por entrada.
+        </p>
+        <p>
+          Duas consequências que valem dizer. A primeira: como a ausência nunca apaga, limpar uma
+          entrada tem de gravar um valor vazio, jamais remover a chave — remover faria o valor
+          <em>ressuscitar</em> na fusão seguinte, com cara de bug intermitente. A segunda: o app
+          <strong>não remove criança</strong>, e é essa ausência que torna seguro não ter marcação de
+          exclusão; se um dia remover, a exclusão precisará viajar como um fato com carimbo próprio.
+        </p>
+        <p>
+          Um aparelho ainda sem preferência nenhuma não sobrescreve quem já configurou: o padrão de
+          fábrica não é tratado como uma escolha. E se a coluna de preferências não existir no banco,
+          o app segue funcionando localmente em vez de derrubar a sincronização inteira.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 05 ─────────────────────────────────────────────────────────────── -->
+<section>
+  <div class="wrap grid">
+    <div class="side"><span class="num">05</span><p class="note">A lista completa, incluindo o que incomoda.</p></div>
+    <div>
+      <p class="kicker">05 — O que sai do aparelho</p>
+      <h2>Tudo que o app envia para fora, sem exceção</h2>
+      <p>
+        “Seus dados não saem do aparelho” é a frase mais fácil de escrever numa página como esta e
+        a mais fácil de escrever sem ter conferido. Então aqui vai a lista completa, levantada
+        percorrendo o programa e não a documentação:
+      </p>
+
+      <div class="scroller">
+        <table>
+          <thead>
+            <tr><th>O quê</th><th>Quando</th><th>Contém dados da família?</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Contagem de uso</strong></td>
+              <td>Uma vez por dia, ao abrir</td>
+              <td>Não. Um identificador aleatório do aparelho, gerado pelo navegador, mais a data e a versão. Não está ligado a nome, e-mail ou qualquer dado seu.</td>
+            </tr>
+            <tr>
+              <td><strong>Checagem de versão</strong></td>
+              <td>No máximo uma vez por dia</td>
+              <td>Não. O app pergunta qual é a versão publicada para avisar quando há atualização.</td>
+            </tr>
+            <tr>
+              <td><strong>Avaliação do app</strong></td>
+              <td>Só se você escrever uma</td>
+              <td>Só o que você digitar: um nome (ou apelido), a nota e o comentário. É voluntário e público para outros usuários.</td>
+            </tr>
+            <tr>
+              <td><strong>QR Code do PIX</strong></td>
+              <td>Só ao abrir a tela de pagamento por PIX</td>
+              <td><strong>Sim, em parte</strong> — veja o aviso abaixo.</td>
+            </tr>
+            <tr>
+              <td><strong>Sincronização</strong></td>
+              <td>Só se você configurar</td>
+              <td>Sim, e vai para o banco de dados que é seu, com credenciais que só você tem.</td>
+            </tr>
+            <tr>
+              <td><strong>Duas bibliotecas</strong></td>
+              <td>Ao carregar a página</td>
+              <td>Não enviam dados: são programas baixados de um repositório público, um para falar com o banco de dados e outro para a chuva de confete.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <span class="tag">Vale saber</span>
+        <p>
+          <strong>O QR Code do PIX é desenhado por um serviço externo.</strong> Para mostrar o
+          quadradinho na tela, o app monta o código de pagamento — que inclui a chave PIX cadastrada,
+          o nome da criança e o valor — e pede a imagem a um gerador público de QR, enviando esse
+          código no endereço da imagem. Nada disso passa pelo desenvolvedor, mas passa por um
+          terceiro.
+        </p>
+        <p>
+          Se preferir não usar esse caminho, a mesma tela mostra o <strong>código PIX em texto</strong>
+          para copiar e colar direto no aplicativo do seu banco, que funciona sem nenhuma imagem
+          externa. A chave PIX em si fica guardada no seu aparelho como qualquer outra configuração.
+        </p>
+      </div>
+
+      <div class="tech">
+        <span class="tag">Ficha técnica</span>
+        <p>
+          O programa do app <strong>não faz nenhuma requisição HTTP direta</strong>: não há uma única
+          chamada de rede escrita no código do aplicativo. O tráfego dos três primeiros itens da
+          tabela é todo mediado pela biblioteca do banco de dados; o QR é uma imagem; e o
+          trabalhador de segundo plano do PWA intercepta requisições apenas para servir o app
+          offline — ele busca o HTML pela rede primeiro e cai no cache quando não há conexão, e
+          serve ícones e manifesto do cache primeiro.
+        </p>
+        <p>
+          A política de segurança de conteúdo declarada pelo app restringe as origens possíveis:
+          programas só do próprio arquivo e do repositório de bibliotecas, imagens só do próprio
+          arquivo e dos dois geradores de QR, conexões só para o serviço de banco de dados, e
+          nenhum objeto embutido. Esta página que você está lendo declara uma política mais rígida
+          ainda — ela não faz conexão alguma.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 06 ─────────────────────────────────────────────────────────────── -->
+<section>
+  <div class="wrap grid">
+    <div class="side"><span class="num">06</span><p class="note">Crianças exigem um padrão mais alto.</p></div>
+    <div>
+      <p class="kicker">06 — Crianças</p>
+      <h2>Um app para crianças que não coleta nada de criança</h2>
+      <p>
+        Nomes de filhos, tarefas e rotina são dados sensíveis, e a maneira mais confiável de
+        protegê-los é não os recolher. O KidsTasks não pede idade, não pede foto, não pede e-mail e
+        não envia nada disso para lugar nenhum. O que a criança digita fica no aparelho do
+        responsável — ou no banco de dados que o próprio responsável criou.
+      </p>
+      <p>
+        As avaliações do app são ação voluntária de adulto e ficam num espaço separado, que não tem
+        contato com os dados da família. O app não pede nem armazena dados de criança nesse espaço.
+      </p>
+      <p>
+        A conta é do responsável em todos os sentidos: é ele quem instala, quem configura, quem
+        aprova e quem decide se haverá sincronização. Não há nada que a criança possa habilitar
+        sozinha que mande informação para fora.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 07 ─────────────────────────────────────────────────────────────── -->
+<section>
+  <div class="wrap grid">
+    <div class="side"><span class="num">07</span><p class="note">O que o PIN é — e o que ele não é.</p></div>
+    <div>
+      <p class="kicker">07 — Segurança</p>
+      <h2>Prometer menos e cumprir</h2>
+      <p>
+        O PIN do modo responsável é um <strong>controle parental</strong>. Ele impede que a criança
+        entre na área de aprovação por curiosidade ou por engano, e cumpre bem esse papel. Ele
+        <strong>não</strong> é uma barreira criptográfica: fica guardado no aparelho como qualquer
+        outra configuração, e quem souber mexer no navegador consegue lê-lo.
+      </p>
+      <p>
+        Dizemos isso na cara porque a alternativa é pior. Todos os dados do app já estão no mesmo
+        aparelho, sem cifra: um PIN “forte” dentro de um app que roda inteiro no cliente daria uma
+        sensação de proteção que o programa não tem como sustentar. A proteção real dos dados é a
+        do próprio dispositivo — bloqueio de tela e conta de usuário do sistema. Pela mesma razão,
+        não reutilize no PIN uma senha que você usa em outro lugar.
+      </p>
+      <ul class="clean">
+        <li><strong>Sem contas, sem senhas nossas.</strong> Não há cadastro no app, então não há credencial sua para vazar de um servidor do desenvolvedor.</li>
+        <li><strong>Tudo por HTTPS.</strong> O app é servido por conexão cifrada, e o mesmo vale para a comunicação com bancos de dados.</li>
+        <li><strong>Se você sincronizar, o acesso é seu.</strong> O banco de dados é seu, protegido pelas regras de acesso que a documentação de instalação manda criar, e o desenvolvedor não tem chave dele.</li>
+        <li><strong>Backup na sua mão.</strong> O app exporta e importa o estado completo num arquivo, sem passar por serviço nenhum.</li>
+      </ul>
+      <div class="tech">
+        <span class="tag">Ficha técnica</span>
+        <p>
+          Uma nota sobre o que <em>não</em> existe de propósito: o app não tem recurso pago, papel de
+          usuário nem área restrita além do PIN. Num aplicativo que roda inteiramente no navegador,
+          qualquer trava desse tipo seria conferida pelo próprio cliente — ou seja, editável por
+          quem quisesse. Esconder um botão é interface, não controle de acesso. Enquanto não houver
+          um servidor capaz de revalidar direitos a cada operação, esse tipo de recurso fica fora.
+        </p>
+        <p>
+          Sobre atualizações: o app compara a versão que está rodando com a versão publicada e
+          avisa quando ficou para trás. A versão exibida no rodapé vem da constante embutida no
+          próprio arquivo — nunca de um documento buscado depois, que mostraria o número de outro
+          build. Um conjunto de testes automatizados trava justamente isso, junto com as
+          invariantes de sincronização descritas acima, e roda a cada envio de código.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 08 ─────────────────────────────────────────────────────────────── -->
+<section>
+  <div class="wrap grid">
+    <div class="side"><span class="num">08</span><p class="note">O que ainda não está bom.</p></div>
+    <div>
+      <p class="kicker">08 — Limitações conhecidas</p>
+      <h2>O que o app ainda não faz bem</h2>
+      <p>
+        Um material que só lista qualidades lê como propaganda. Estas são as limitações reais,
+        levantadas na avaliação de acessibilidade e na leitura do próprio código:
+      </p>
+      <div class="scroller">
+        <table>
+          <thead><tr><th>Limitação</th><th>Quem sente</th></tr></thead>
+          <tbody>
+            <tr><td>Componentes personalizados — modais, seletor de estrelas, arrastar e soltar — sem a marcação completa que leitores de tela esperam</td><td>Quem usa leitor de tela</td></tr>
+            <tr><td>Reordenar tarefas exige arrastar; não há caminho equivalente pelo teclado</td><td>Quem depende de teclado</td></tr>
+            <tr><td>Botões identificados por emoji podem ser lidos de forma verbosa por leitores de tela</td><td>Quem usa leitor de tela</td></tr>
+            <tr><td>Sem modo de alto contraste próprio — o app depende do ajuste do sistema</td><td>Quem tem baixa visão</td></tr>
+            <tr><td>Nenhuma auditoria formal com tecnologia assistiva foi realizada até agora</td><td>Todos</td></tr>
+            <tr><td>O PIN é controle parental, não barreira criptográfica</td><td>Quem espera cofre</td></tr>
+            <tr><td>O QR Code do PIX depende de um gerador externo (há o código em texto como alternativa)</td><td>Quem paga por PIX</td></tr>
+            <tr><td>Cada banco de dados sincronizado atende uma única família</td><td>Quem quisesse separar núcleos no mesmo banco</td></tr>
+            <tr><td>Não há remoção de criança — só é possível deixar de usar o painel dela</td><td>Quem cadastrou por engano</td></tr>
+            <tr><td>Sem JavaScript o app não abre, e o primeiro carregamento precisa de conexão</td><td>Quem bloqueia scripts</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Se você esbarrar numa barreira que não está nesta lista, o repositório público aceita
+        relatos — o endereço está no rodapé.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 09 ─────────────────────────────────────────────────────────────── -->
+<section>
+  <div class="wrap grid">
+    <div class="side"><span class="num">09</span><p class="note">Quem faz e sob quais termos.</p></div>
+    <div>
+      <p class="kicker">09 — Autoria e uso</p>
+      <h2>Quem escreveu isto</h2>
+      <p>
+        O KidsTasks é um projeto pessoal de <strong>Marlon Gomes da Costa</strong>, sob a marca
+        <strong>MGC Dev</strong>, em São Raimundo das Mangabeiras, no Maranhão. É uma iniciativa
+        pessoal, sem vínculo institucional, mantida por gosto e usada em casa antes de ser
+        publicada.
+      </p>
+      <p>
+        O uso é gratuito para famílias e para fins educacionais. O código é público e pode ser lido
+        por qualquer pessoa; a licença é de uso não comercial, com os termos completos no
+        repositório. Não há anúncios, não há venda de dados e não há plano pago — apoiar é
+        opcional e não muda nada no app.
+      </p>
+      <div class="actions">
+        <a class="btn" href="./KidsTasks.html">Abrir o app</a>
+        <a class="btn ghost" href="https://github.com/Magoc25/KidsTasks-App">Código e documentação</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap grid">
+    <div class="side"></div>
+    <div>
+      <p>
+        KidsTasks · MGC Dev · Marlon Gomes da Costa<br>
+        Código, documentação e histórico em
+        <a href="https://github.com/Magoc25/KidsTasks-App">github.com/Magoc25/KidsTasks-App</a>
+      </p>
+      <p>
+        Esta página descreve o funcionamento do app a partir do código publicado. Onde a
+        documentação e o programa divergirem, vale o programa.
+      </p>
+    </div>
+  </div>
+</footer>
+
+</div>
+
+<script>
+(function(){
+  var page=document.getElementById('page');
+  var s=document.getElementById('btnSimples'), t=document.getElementById('btnTecnico');
+  function set(modo){
+    page.setAttribute('data-mode',modo);
+    var tec = modo==='tecnico';
+    t.setAttribute('aria-pressed', tec?'true':'false');
+    s.setAttribute('aria-pressed', tec?'false':'true');
+  }
+  s.addEventListener('click',function(){set('simples')});
+  t.addEventListener('click',function(){set('tecnico')});
+})();
+</script>
+</body>
+</html>

@@ -295,6 +295,35 @@ function veredito() {
     check('nenhum `delete` sobre `state.*`', noEstado.length === 0, JSON.stringify(noEstado));
   });
 
+  // §37: as três regras invioláveis da página de apresentação envelhecem em silêncio — nada no
+  // fluxo de release toca nesse arquivo, então um número de versão que entre ali passa a mentir
+  // sem que nada acuse. A lista de internals é DERIVADA do app (r68b): identificador de
+  // armazenamento, nomes das preferências sincronizadas e das tabelas do banco.
+  const PAG = path.join(ROOT, 'apresentacao.html');
+  if (fs.existsSync(PAG)) await suite('Estático — página de apresentação respeita o §37', async () => {
+    const P = fs.readFileSync(PAG, 'utf8');
+    const chave = (HTML.match(/STORAGE_KEY\s*=\s*'([^']+)'/) || [])[1];
+    const prefs = [...(((HTML.match(/SYNCED_SETTINGS\s*=\s*\[([^\]]*)\]/) || [])[1]) || '')
+      .matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    const tabelas = [...new Set([...HTML.matchAll(/from\('([a-z_]+)'\)/g)].map((m) => m[1]))];
+    const internals = [chave, ...prefs, ...tabelas].filter(Boolean).filter((n) => P.includes(n));
+    check(`nenhum dos ${1 + prefs.length + tabelas.length} nomes internos do app aparece na página`,
+      internals.length === 0, 'vazou: ' + JSON.stringify(internals));
+
+    const texto = P.replace(/<style[\s\S]*?<\/style>/g, ' ').replace(/<script[\s\S]*?<\/script>/g, ' ')
+      .replace(/<[^>]+>/g, ' ');
+    const versoes = [...texto.matchAll(/\bv?\d+\.\d+(\.\d+)?\b/g)].map((m) => m[0]);
+    check('nenhum número versionado no texto visível', versoes.length === 0,
+      'vira item a mais no fluxo de bump: ' + JSON.stringify(versoes));
+
+    check('nenhum recurso externo carregado', !/src="https?:/.test(P) && !/<link[^>]+href="https?:/.test(P));
+    check('CSP própria, sem frame-ancestors (ignorado em <meta>)',
+      /Content-Security-Policy/.test(P) && /connect-src 'none'/.test(P) && !/frame-ancestors/.test(P));
+    check('tema nas duas formas + fundo de token no body',
+      /@media\s*\(prefers-color-scheme:dark\)/.test(P) && /:root\[data-theme="dark"\]/.test(P) &&
+      /body\{[^}]*background:var\(--paper\)/.test(P));
+  });
+
   if (!JSDOM) {
     const dica = 'npm install --no-save --no-package-lock jsdom';
     if (process.env.CI) { console.log('\n✗ jsdom ausente no CI — o smoke completo NÃO rodou (`' + dica + '`)'); process.exit(1); }
