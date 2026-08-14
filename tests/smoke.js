@@ -177,19 +177,44 @@ async function bootDevice(initialState) {
   return dom;
 }
 // `const` de <script> clássico não vira propriedade do window: o eval global alcança.
-const ev = (dom, expr) => dom.window.eval(expr);
+// r74(a): leitura de estado/DOM — e todo passo que DIRIGE o app — passa por um caminho tolerante.
+// Sem isso, um `eval` que estoura mata as asserções seguintes e a bateria termina SEM nenhum `✗`:
+// indistinguível de "passou", e é assim que uma mutação boa vira "asserção morta" por engano.
+function ev(dom, expr) {
+  try { return dom.window.eval(expr); }
+  catch (e) { harnessQuebrou('eval: ' + expr, e); return undefined; }
+}
 
 // ─────────────────────────────────────── mini framework ───────────────────────────────────────
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, harness = 0;
 const failures = [];
 function check(name, cond, extra) {
   if (cond) { pass++; console.log('  ✓ ' + name); }
   else { fail++; failures.push(name); console.log('  ✗ ' + name + (extra ? '\n      ' + extra : '')); }
 }
+// Veredito PRÓPRIO (r74a): falha do harness não é ✓ nem ✗ — é INCONCLUSIVA. Contá-la como verde
+// esconde a regressão; contá-la como vermelha manda reescrever um teste que talvez esteja certo.
+function harnessQuebrou(onde, e) {
+  harness++;
+  const msg = String((e && e.stack) || e).split('\n').slice(0, 3).join('\n      ');
+  failures.push('⚠ harness: ' + onde);
+  console.log('  ⚠ FALHA DO HARNESS — ' + onde + '\n      ' + msg);
+}
 async function suite(name, fn) {
   console.log('\n▸ ' + name);
   try { await fn(); }
-  catch (e) { fail++; failures.push(name + ' (exceção)'); console.log('  ✗ exceção: ' + (e && e.stack || e)); }
+  catch (e) { harnessQuebrou(name, e); }
+}
+function veredito() {
+  console.log('\n────────────────────────────────');
+  if (harness) {
+    console.log(`Resultado: ${pass} ✓ · ${fail} ✗ · ${harness} ⚠ → INCONCLUSIVA (o harness caiu; as asserções depois dele não rodaram)`);
+    console.log('Ocorrências:\n  - ' + failures.join('\n  - '));
+    process.exit(2);
+  }
+  console.log(`Resultado: ${pass} ✓ · ${fail} ✗`);
+  if (fail) console.log('Falhas:\n  - ' + failures.join('\n  - '));
+  process.exit(fail ? 1 : 0);
 }
 
 // ─────────────────────────────────────────── testes ───────────────────────────────────────────
@@ -229,12 +254,52 @@ async function suite(name, fn) {
       /\.table-scroll\.can-scroll::after/.test(HTML) && /function updateTableScrollHints/.test(HTML));
   });
 
+  // r72(a)/r74(b): espelho que JÁ NASCE com o valor satisfaz a asserção dinâmica sozinho — o teste
+  // fica verde com o mecanismo desligado. Esta regra vive no TEXTO-FONTE, então só a estática a
+  // enxerga: no runtime a evidência já foi sobrescrita (r78c).
+  await suite('Estático — espelho de estado nasce NEUTRO (r72a/r74b)', async () => {
+    const espelhos = [...HTML.matchAll(/id="([A-Za-z0-9_-]*[Vv]ersion[A-Za-z0-9_-]*)"[^>]*>([^<]*)</g)]
+      .map((m) => [m[1], m[2]]);
+    const comNumero = espelhos.filter(([, txt]) => /\d+\.\d+/.test(txt));
+    check(`${espelhos.length === 1 ? 'o espelho de versão nasce' : 'os ' + espelhos.length + ' espelhos de versão nascem'} sem número`,
+      espelhos.length > 0 && comNumero.length === 0,
+      '2ª cópia da versão no HTML (envelhece sozinha): ' + JSON.stringify(comNumero));
+
+    // Mesma regra varrida no markup inteiro: qualquer x.y.z fixo fora de <script> é 2ª cópia.
+    const markup = HTML.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<style[\s\S]*?<\/style>/g, '');
+    const fixos = [...markup.matchAll(/>[^<]*?\bv?\d+\.\d+\.\d+\b[^<]*?</g)].map((m) => m[0].trim());
+    check('nenhum número de versão fixo no markup', fixos.length === 0, 'fixos: ' + JSON.stringify(fixos));
+
+    // r38(a): buscar a versão de um arquivo publicado exibe o build de OUTRO deploy (e o cache
+    // local segura por horas). A constante embutida é a única que reflete o código rodando.
+    check('r38(a): a versão exibida não vem de fetch do CHANGELOG',
+      !/fetch\s*\([^)]*CHANGELOG/i.test(HTML));
+  });
+
+  // r78(a): no dia em que o mapa passou a fundir por UNIÃO, todo `delete mapa[k]` do código virou
+  // perda silenciosa — a chave some aqui, o outro aparelho ainda a tem, e a fusão a RESSUSCITA.
+  // Não é intermitente: é determinístico e invisível com um aparelho só. A lista de mapas é
+  // DERIVADA do próprio código (r68b) — o próximo mapa registrado entra na varredura sozinho.
+  await suite('Estático — nenhuma entrada de mapa sincronizado sai por `delete` (r78a)', async () => {
+    const m = HTML.match(/MAP_SETTINGS\s*=\s*new Set\(\[([^\]]*)\]\)/);
+    const mapas = m ? [...m[1].matchAll(/['"]([^'"]+)['"]/g)].map((x) => x[1]) : [];
+    check('MAP_SETTINGS foi lido do código', mapas.length > 0, 'não achei o `new Set([...])`');
+
+    const porMapa = mapas.filter((k) => new RegExp('delete\\s+[\\w.$]*\\b' + k + '\\s*\\[').test(HTML));
+    check(`os ${mapas.length} mapas sincronizados (${mapas.join(', ')}) não usam \`delete\``,
+      porMapa.length === 0,
+      'desligar tem de gravar valor falsy, nunca remover a chave: ' + JSON.stringify(porMapa));
+
+    // Rede mais larga: qualquer `delete` sobre o estado sincronizado cai na mesma armadilha.
+    const noEstado = [...HTML.matchAll(/delete\s+[\w.$]*\bstate\.[\w$]+\s*[[.]/g)].map((x) => x[0]);
+    check('nenhum `delete` sobre `state.*`', noEstado.length === 0, JSON.stringify(noEstado));
+  });
+
   if (!JSDOM) {
     const dica = 'npm install --no-save --no-package-lock jsdom';
     if (process.env.CI) { console.log('\n✗ jsdom ausente no CI — o smoke completo NÃO rodou (`' + dica + '`)'); process.exit(1); }
-    console.log(`\n────────────────────────────────\nDegrau estático: ${pass} ✓ · ${fail} ✗`);
     console.log('(jsdom ausente: as fases com DOM não rodaram — `' + dica + '` para o smoke completo.)');
-    process.exit(fail ? 1 : 0);
+    veredito();
   }
 
   // ---- Gate do r66(a): coleção nova no sync TEM de nascer com união por id --------------------
@@ -259,6 +324,15 @@ async function suite(name, fn) {
     check(`as ${total} tabelas roláveis têm a casca .table-scroll`, total > 0 && total === dentro,
       `${dentro} de ${total} inscritas`);
     check('recalcular a sombra não quebra', ev(pc, "(function(){try{updateTableScrollHints();return true}catch(e){return String(e)}})()") === true);
+  });
+
+  // O par da estática acima (r78c): ela prova que o espelho nasce vazio, esta prova que ALGUÉM o
+  // preenche. Uma sem a outra deixa passar metade — placeholder envelhecido ou mecanismo morto.
+  await suite('r38(a) — o rodapé exibe a APP_VERSION deste build', async () => {
+    const v = ev(pc, 'APP_VERSION');
+    check('APP_VERSION é constante x.y.z', /^\d+\.\d+\.\d+$/.test(String(v)), 'leu: ' + v);
+    const exibido = ev(pc, "document.getElementById('appVersion').textContent");
+    check('o espelho foi preenchido pelo mecanismo', exibido === '© MGC · v' + v, 'exibido: ' + exibido);
   });
 
   // ---- Regressão principal: dois aparelhos configurando crianças diferentes -------------------
@@ -307,6 +381,31 @@ async function suite(name, fn) {
     check('as duas chaves PIX sobrevivem',
       cloud.childPixKeys && cloud.childPixKeys.ana === 'ana@pix.com' && cloud.childPixKeys.bruno === 'bruno@pix.com',
       'nuvem: ' + JSON.stringify(cloud.childPixKeys));
+    cel.window.close();
+  });
+
+  // r78(a), metade comportamental: a estática garante que ninguém escreveu `delete`; esta garante o
+  // efeito — limpar uma entrada NÃO volta sozinha na próxima fusão. O sintoma do bug engana: o
+  // usuário relata "não salvou", mas o valor reaparece ao mexer num item vizinho ou ao reabrir.
+  await suite('r78(a) — limpar entrada de mapa não ressuscita na fusão', async () => {
+    const cel = await bootDevice({ familyId: 'fam1', familyName: 'Família Teste', childId: 'bruno' });
+    check('o celular chegou conhecendo a chave da Ana',
+      ev(cel, "getChildPixKey('ana')") === 'ana@pix.com', 'celular: ' + ev(cel, "getChildPixKey('ana')"));
+
+    ev(pc, "saveChildPixKey('ana','')");
+    await settle(1400);
+
+    const mapa = (((cloudSettings() || {}).values || {}).childPixKeys) || {};
+    check('a chave continua PRESENTE na nuvem, com valor falsy',
+      Object.prototype.hasOwnProperty.call(mapa, 'ana') && !mapa.ana,
+      'nuvem: ' + JSON.stringify(mapa));
+
+    await ev(cel, 'syncSettingsWithSupabase()');
+    await settle(300);
+    check('o celular NÃO ressuscita a chave apagada',
+      ev(cel, "getChildPixKey('ana')") === '', 'celular: ' + ev(cel, "getChildPixKey('ana')"));
+    check('e o Bruno segue intacto (limpar um não apaga o outro)',
+      ev(cel, "getChildPixKey('bruno')") === 'bruno@pix.com');
     cel.window.close();
   });
 
@@ -368,9 +467,5 @@ async function suite(name, fn) {
   });
 
   pc.window.close();
-
-  console.log('\n────────────────────────────────');
-  console.log(`Resultado: ${pass} ✓ · ${fail} ✗`);
-  if (fail) console.log('Falhas:\n  - ' + failures.join('\n  - '));
-  process.exit(fail ? 1 : 0);
-})().catch((e) => { console.error('Harness quebrou:', e); process.exit(1); });
+  veredito();
+})().catch((e) => { harnessQuebrou('fora de suíte (boot?)', e); veredito(); });
