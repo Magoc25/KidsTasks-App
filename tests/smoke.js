@@ -32,6 +32,13 @@ const SB_KEY = 'anon-de-teste';
 // ───────────────────────── Supabase falso (compartilhado pelos 2 devices) ─────────────────────
 // Query-builder encadeável e THENABLE: o app faz `await client.from(x).select().eq(...)`, então
 // cada método devolve o próprio builder e o `then` resolve {data,error} — sem isso o await trava.
+// O banco de verdade SERIALIZA: o que trafega é JSON, nunca a referência do objeto do aparelho.
+// Sem isto o app publica `values[k]=state[k]` e a "nuvem" passa a apontar para o objeto VIVO do
+// device — os dois jsdom e a linha do banco viram o mesmo objeto, e toda escrita cega parece
+// preservar o que deveria perder. O bug que se quer pegar fica invisível justamente no cenário
+// que existe para pegá-lo.
+const copia = (v) => (v == null ? v : JSON.parse(JSON.stringify(v)));
+
 function createDb(seed) {
   const tables = Object.assign(
     { families: [], children: [], tasks: [], task_instances: [], goals: [], weekly_payments: [], app_config: [], app_pings: [], app_reviews: [] },
@@ -52,7 +59,7 @@ function createDb(seed) {
       if (q.op === 'insert' || q.op === 'upsert') {
         const list = Array.isArray(q.payload) ? q.payload : [q.payload];
         const out = list.map((raw) => {
-          const row = Object.assign({}, raw);
+          const row = copia(Object.assign({}, raw));
           let hit = null;
           if (q.op === 'upsert') {
             const keys = q.conflict ? q.conflict.split(',').map((s) => s.trim()) : ['id'];
@@ -64,12 +71,12 @@ function createDb(seed) {
           rows().push(row);
           return row;
         });
-        return { data: q.single ? out[0] || null : out, error: null };
+        return { data: copia(q.single ? out[0] || null : out), error: null };
       }
       if (q.op === 'update') {
         const hits = rows().filter(match);
-        hits.forEach((r) => Object.assign(r, q.payload));
-        return { data: q.single ? hits[0] || null : hits, error: null };
+        hits.forEach((r) => Object.assign(r, copia(q.payload)));
+        return { data: copia(q.single ? hits[0] || null : hits), error: null };
       }
       if (q.op === 'delete') {
         const keep = rows().filter((r) => !match(r));
@@ -85,10 +92,10 @@ function createDb(seed) {
       if (q.limit != null) out = out.slice(0, q.limit);
       if (q.single === 'one') {
         if (out.length !== 1) return { data: null, error: { message: 'JSON object requested, multiple (or no) rows returned' } };
-        return { data: out[0], error: null };
+        return { data: copia(out[0]), error: null };
       }
-      if (q.single === 'maybe') return { data: out[0] || null, error: null };
-      return { data: out, error: null };
+      if (q.single === 'maybe') return { data: copia(out[0] || null), error: null };
+      return { data: copia(out), error: null };
     }
 
     const api = {
@@ -165,8 +172,8 @@ function onLoad(w, ms = 15000) {
 }
 const settle = (ms = 1200) => new Promise((r) => setTimeout(r, ms));
 
-async function bootDevice(initialState) {
-  const dom = new JSDOM(HTML, {
+async function bootDevice(initialState, html) {
+  const dom = new JSDOM(html || HTML, {
     url: PAGE_URL,
     runScripts: 'dangerously',
     pretendToBeVisual: true,
@@ -175,6 +182,17 @@ async function bootDevice(initialState) {
   await onLoad(dom.window);
   await settle(1500); // r38(b): cobre o debounce de 800ms do push de settings
   return dom;
+}
+
+// r69(c): o aparelho que ainda não atualizou GRAVA CEGO durante o rollout. O que decide se ele só
+// atrasa a convergência ou QUEBRA o merge é se o normalizador dele preserva o que não conhece —
+// e isso não se prova lendo o código: prova-se rodando o build anterior como 2º aparelho.
+// Fixado no commit ANTERIOR ao que trouxe a união por id (`f9d7067`), que é o último build sem
+// `MAP_SETTINGS` — é ele que ainda pode estar num aparelho lá fora.
+const BUILD_ANTERIOR = 'c76c7e6';
+function htmlDoBuildAnterior() {
+  return require('child_process')
+    .execFileSync('git', ['show', BUILD_ANTERIOR + ':KidsTasks.html'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
 }
 // `const` de <script> clássico não vira propriedade do window: o eval global alcança.
 // r74(a): leitura de estado/DOM — e todo passo que DIRIGE o app — passa por um caminho tolerante.
@@ -436,6 +454,110 @@ function veredito() {
     check('e o Bruno segue intacto (limpar um não apaga o outro)',
       ev(cel, "getChildPixKey('bruno')") === 'bruno@pix.com');
     cel.window.close();
+  });
+
+  // ---- r69(c): round-trip pelo BUILD ANTERIOR de verdade, não por um envelope simulado ---------
+  // A suíte abaixo já cobre "envelope v1 fabricado à mão"; isso testa o formato, não o CÓDIGO que
+  // o produz. O aparelho desatualizado é que decide o destino do rollout, então ele entra na
+  // bateria como 2º jsdom, rodando o HTML daquele commit.
+  const ehOArquivoDoRepo = path.resolve(HTML_PATH) === path.resolve(ROOT, 'KidsTasks.html');
+  if (!ehOArquivoDoRepo) {
+    console.log('\n▸ r69(c) — round-trip pelo build anterior\n  · pulado: rodando contra ' +
+      path.relative(ROOT, HTML_PATH) + ', e o par "atual × anterior" só faz sentido com o HTML do repo');
+  } else await suite('r69(c) — o build ANTERIOR grava cego e o novo tem de sobreviver a isso', async () => {
+    let ANTIGO;
+    try { ANTIGO = htmlDoBuildAnterior(); }
+    catch (e) { return harnessQuebrou('git show ' + BUILD_ANTERIOR + ' (clone raso? use fetch-depth: 0)', e); }
+    check('o build anterior é mesmo anterior à união por id', !/MAP_SETTINGS/.test(ANTIGO),
+      'o commit fixado já tem MAP_SETTINGS — reveja o SHA');
+
+    shared.tables.families[0].settings = null; // nuvem limpa: a suíte não depende das anteriores
+    const novo = await bootDevice({ familyId: 'fam1', familyName: 'Família Teste', childId: 'ana' });
+    ev(novo, "setChildGender('ana','f')");
+    ev(novo, "saveChildPixKey('ana','ana@pix.com')");
+    await settle(1400);
+    const publicado = cloudSettings() || {};
+    check('o build novo publica envelope v2 com carimbo por entrada',
+      publicado.v === 2 && typeof (publicado.meta || {}).childGender === 'object',
+      'nuvem: ' + JSON.stringify(publicado.meta));
+
+    // Aparelho ainda na versão antiga entra no ar e puxa o que o novo publicou.
+    const antigo = await bootDevice({ familyId: 'fam1', familyName: 'Família Teste', childId: 'bruno' }, ANTIGO);
+    check('o build anterior LÊ o envelope v2 sem engasgar',
+      ev(antigo, "state.childGender && state.childGender.ana") === 'f',
+      'leu: ' + ev(antigo, 'JSON.stringify(state.childGender)'));
+
+    // ...e grava cego, do jeito dele.
+    ev(antigo, "setChildGender('bruno','m')");
+    await settle(1400);
+    const depois = cloudSettings() || {};
+    const mapa = (depois.values || {}).childGender || {};
+    check('a entrada da Ana sobrevive ao round-trip pelo build antigo',
+      mapa.ana === 'f' && mapa.bruno === 'm', 'nuvem: ' + JSON.stringify(mapa));
+    // ESTA é a pergunta do r69(c): o que o build antigo faz com o campo que ele não conhece?
+    // Resposta medida (não prevista): ele ACHATA. Adota o carimbo por entrada opacamente no pull,
+    // mas o `saveState` dele re-carimba a chave inteira com um escalar assim que edita o mapa. O
+    // build antigo está congelado nesse commit, então isto é permanente — o que precisa ser
+    // verdade é o resto: escalar é formato ACEITO na leitura, nada se perde, e a granularidade
+    // volta sozinha. É por isso que o novo lê carimbo em dois formatos; tirar esse ramo faria o
+    // merge parar de adotar em silêncio, e é esta asserção que ficaria vermelha.
+    const carimbo = (depois.meta || {}).childGender;
+    check('o build antigo achata o carimbo por entrada num escalar (permanente — commit congelado)',
+      typeof carimbo === 'number' && carimbo > 0, 'carimbo devolvido: ' + JSON.stringify(carimbo));
+    check('o build antigo rebaixa o envelope para v1 (esperado — ele não conhece o v2)', depois.v === 1);
+    check('e o build novo aceita o carimbo escalar sem perder entrada',
+      ev(novo, "_entryStamp(" + carimbo + ",'ana')") === carimbo &&
+      ev(novo, "_entryStamp({ana:7},'ana')") === 7,
+      'o ramo escalar de _entryStamp é o que sustenta o rollout');
+
+    // E o aparelho novo reassume sem perder nada nem re-migrar.
+    await ev(novo, 'syncSettingsWithSupabase()');
+    await settle(300);
+    check('o aparelho novo mantém as duas crianças depois do round-trip',
+      ev(novo, "getChildGender('ana')") === 'f' && ev(novo, "getChildGender('bruno')") === 'm');
+    check('e restaura o envelope v2 na nuvem', (cloudSettings() || {}).v === 2);
+    check('o carimbo local do novo continua por entrada (não virou escalar)',
+      ev(novo, "typeof state.settingsMeta.childGender") === 'object' &&
+      ev(novo, "!!state.settingsMeta.childGender.ana"));
+
+    antigo.window.close();
+    novo.window.close();
+  });
+
+  // A janela real do rollout: o aparelho antigo edita SEM ter puxado o que o novo acabou de criar.
+  // Aí ele apaga mesmo — é o bug que o r66a curou, e o build antigo continua com ele. O que esta
+  // suíte trava é que a perda seja RECUPERÁVEL: a ausência não apaga, então o aparelho novo
+  // devolve a entrada no sync seguinte, em vez de o dado morrer de vez.
+  if (ehOArquivoDoRepo) await suite('r69(c) — o que o build antigo apaga, o novo recupera', async () => {
+    let ANTIGO;
+    try { ANTIGO = htmlDoBuildAnterior(); }
+    catch (e) { return harnessQuebrou('git show ' + BUILD_ANTERIOR, e); }
+
+    shared.tables.families[0].settings = null;
+    const novo = await bootDevice({ familyId: 'fam1', familyName: 'Família Teste', childId: 'ana' });
+    ev(novo, "setChildGender('ana','f')");
+    await settle(1400);
+
+    const antigo = await bootDevice({ familyId: 'fam1', familyName: 'Família Teste', childId: 'bruno' }, ANTIGO);
+    ev(novo, "setChildGender('carla','f')"); // o antigo já bootou: nunca viu a Carla
+    await settle(1400);
+    check('o aparelho antigo realmente não viu a Carla (senão o cenário não é o do rollout)',
+      !JSON.parse(ev(antigo, 'JSON.stringify(state.childGender)') || '{}').carla);
+    ev(antigo, "setChildGender('bruno','m')"); // grava cego, com a lista sem a Carla
+    await settle(1400);
+    const apagou = !(((cloudSettings() || {}).values || {}).childGender || {}).carla;
+    check('o build antigo de fato apaga o que não viu (o bug que o r66a curou)', apagou,
+      'se isto ficou verde-por-engano, a suíte não está medindo o rollout');
+
+    await ev(novo, 'syncSettingsWithSupabase()');
+    await settle(300);
+    const recuperado = ((cloudSettings() || {}).values || {}).childGender || {};
+    check('o aparelho novo devolve a Carla à nuvem (ausência não apaga)',
+      recuperado.carla === 'f' && recuperado.ana === 'f' && recuperado.bruno === 'm',
+      'nuvem: ' + JSON.stringify(recuperado));
+
+    antigo.window.close();
+    novo.window.close();
   });
 
   // ---- Compatibilidade com o formato anterior (carimbo escalar, envelope v1) ------------------

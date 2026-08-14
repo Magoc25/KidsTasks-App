@@ -10,7 +10,11 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 — o cenário do r69(c) roda o BUILD ANTERIOR como 2º aparelho, buscado com
+      # `git show <sha>:KidsTasks.html`. No clone raso padrão esse objeto não existe e a suíte sai
+      # como INCONCLUSIVA (nunca verde, r74a) — mas o certo é ela rodar de verdade.
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       # --no-save --no-package-lock: o repo fica SEM package.json de propósito (r33 — node_modules
