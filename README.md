@@ -269,37 +269,15 @@ Ao final, vá em **Table Editor** e confirme que as **6 tabelas** aparecem: `fam
 
 ---
 
-**Evitar suspensão por inatividade _(opcional)_:**
+**Sobre a suspensão por inatividade — o que você precisa saber (nenhuma configuração):**
 
-> ⚠️ **Este bloco não é obrigatório para o app funcionar.** O KidsTasks opera normalmente sem ele. Serve apenas para evitar que o Supabase suspenda seu projeto quando você não abrir o app por 7 dias seguidos.
+O plano gratuito do Supabase **suspende projetos sem uso por cerca de 7 dias**. Como isso afeta você, em três frases:
 
-**Antes de mais nada, o que já acontece sozinho:** usar o app normalmente **já mantém seu projeto ativo** — cada abertura conversa com o banco, e isso conta como atividade. Se você ficar **mais de ~7 dias sem abrir**, o Supabase gratuito pode suspender o projeto; aí a sincronização passa a falhar até você entrar no painel e clicar em **Restore project**. **Nada é apagado** — a suspensão é uma pausa, não uma exclusão, e ao restaurar tudo volta como estava. O bloco abaixo serve para que nem isso aconteça.
+- **Usar o app mantém o projeto ativo.** Cada vez que você abre o KidsTasks, ele conversa com o seu banco, e isso conta. Abrindo ao menos uma vez por semana, você nunca verá uma suspensão.
+- **Se ficar muito tempo sem abrir, a sincronização para.** O app continua funcionando normalmente no aparelho — as tarefas, as estrelas e o histórico estão salvos localmente —, mas deixa de conversar com o banco.
+- **Voltar é um clique e não custa nada.** Entre em [supabase.com](https://supabase.com), abra o projeto e clique em **Restore project**. Em um ou dois minutos tudo volta. **Nada é apagado:** suspensão é pausa, não exclusão.
 
-O Supabase pode suspender projetos gratuitos sem atividade por 7 dias. Para evitar isso, configure um agendamento automático dentro do próprio banco — ele gera uma consulta leve toda semana, mesmo que você não abra o app.
-
-**Passo 1 — Ativar a extensão pg_cron:**
-
-No painel do seu projeto Supabase, acesse **Database → Extensions** (menu lateral esquerdo), procure por **`pg_cron`** e ative o toggle.
-
-**Passo 2 — Agendar a consulta semanal:**
-
-Volte ao **SQL Editor**, cole e execute:
-
-```sql
-SELECT cron.schedule(
-  'kidstasks-keep-alive',
-  '0 8 * * 1',
-  $$SELECT COUNT(*) FROM public.families$$
-);
-```
-
-**Passo 3 — Confirmar que foi criado:**
-
-```sql
-SELECT * FROM cron.job;
-```
-
-Deve aparecer uma linha com `jobname = kidstasks-keep-alive`. Pronto — funciona sozinho a partir daí, toda segunda-feira às 5h Brasília, sem nenhuma ação adicional.
+> 🔍 **Por que não sugerimos um "agendamento automático" aqui.** Uma receita comum na internet é criar um agendamento (`pg_cron`) dentro do próprio banco para fingir atividade. **Testamos e não funciona:** neste projeto o agendamento rodou com sucesso toda semana durante dois meses, e o Supabase suspendeu o projeto assim mesmo — cinco dias depois da última execução. A suspensão é medida por acesso ao **serviço**, não por consulta interna do banco. Preferimos não te dar um passo que não resolve.
 
 ---
 
