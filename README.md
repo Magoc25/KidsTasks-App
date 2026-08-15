@@ -273,6 +273,8 @@ Ao final, vá em **Table Editor** e confirme que as **6 tabelas** aparecem: `fam
 
 > ⚠️ **Este bloco não é obrigatório para o app funcionar.** O KidsTasks opera normalmente sem ele. Serve apenas para evitar que o Supabase suspenda seu projeto quando você não abrir o app por 7 dias seguidos.
 
+**Antes de mais nada, o que já acontece sozinho:** usar o app normalmente **já mantém seu projeto ativo** — cada abertura conversa com o banco, e isso conta como atividade. Se você ficar **mais de ~7 dias sem abrir**, o Supabase gratuito pode suspender o projeto; aí a sincronização passa a falhar até você entrar no painel e clicar em **Restore project**. **Nada é apagado** — a suspensão é uma pausa, não uma exclusão, e ao restaurar tudo volta como estava. O bloco abaixo serve para que nem isso aconteça.
+
 O Supabase pode suspender projetos gratuitos sem atividade por 7 dias. Para evitar isso, configure um agendamento automático dentro do próprio banco — ele gera uma consulta leve toda semana, mesmo que você não abra o app.
 
 **Passo 1 — Ativar a extensão pg_cron:**
