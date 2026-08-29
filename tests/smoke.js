@@ -342,8 +342,18 @@ function veredito() {
     const prefs = [...(((HTML.match(/SYNCED_SETTINGS\s*=\s*\[([^\]]*)\]/) || [])[1]) || '')
       .matchAll(/'([^']+)'/g)].map((m) => m[1]);
     const tabelas = [...new Set([...HTML.matchAll(/from\('([a-z_]+)'\)/g)].map((m) => m[1]))];
-    const internals = [chave, ...prefs, ...tabelas].filter(Boolean).filter((n) => P.includes(n));
-    check(`nenhum dos ${1 + prefs.length + tabelas.length} nomes internos do app aparece na página`,
+    // r90(c): derivação que SECA fica verde de graça — "nenhum dos zero internals apareceu" é sempre
+    // verdade, e a fonte morta some dentro do total das outras. Cada fonte responde por si.
+    check('as 3 fontes de nomes internos devolveram algo (chave, prefs, tabelas)',
+      !!chave && prefs.length > 0 && tabelas.length > 0,
+      `chave=${JSON.stringify(chave)} prefs=${prefs.length} tabelas=${tabelas.length}`);
+    // r90(c), outra metade: em app brasileiro metade dos internals É palavra comum (`metas`,
+    // `pagamentos`). Filtrar por FORMA de identificador continua sendo derivação — o internal que
+    // nascer amanhã entra sozinho — sem mandar apagar frase honesta da página pública.
+    const ehIdentificador = (n) => /[_.\-\d]/.test(n) || /[a-z][A-Z]/.test(n);
+    const internals = [chave, ...prefs, ...tabelas].filter(Boolean).filter(ehIdentificador).filter((n) => P.includes(n));
+    const varridos = [chave, ...prefs, ...tabelas].filter(Boolean).filter(ehIdentificador);
+    check(`nenhum dos ${varridos.length} nomes internos do app aparece na página`,
       internals.length === 0, 'vazou: ' + JSON.stringify(internals));
 
     const texto = P.replace(/<style[\s\S]*?<\/style>/g, ' ').replace(/<script[\s\S]*?<\/script>/g, ' ')
