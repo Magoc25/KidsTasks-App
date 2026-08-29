@@ -136,6 +136,7 @@ const cloudSettings = () => (shared.tables.families[0] || {}).settings || null;
 function stubWindow(w, initialState) {
   w.structuredClone = w.structuredClone || ((o) => JSON.parse(JSON.stringify(o)));
   w.supabase = { createClient };
+  w.confirm = () => true; // jsdom devolve undefined: `unmarkHistoryPaid` sairia antes de gravar
   w.confetti = () => {};
   w.fetch = async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '' });
   const noop = () => {};
@@ -311,6 +312,23 @@ function veredito() {
     // Rede mais larga: qualquer `delete` sobre o estado sincronizado cai na mesma armadilha.
     const noEstado = [...HTML.matchAll(/delete\s+[\w.$]*\bstate\.[\w$]+\s*[[.]/g)].map((x) => x[0]);
     check('nenhum `delete` sobre `state.*`', noEstado.length === 0, JSON.stringify(noEstado));
+  });
+
+  // Molde do r68b ("todo X novo tem de estar inscrito em Y"): a taxa VIVA da ⭐ muda quando o
+  // responsável quiser, e ler `state.pointValueBRL` direto num caminho de histórico repreça o que
+  // já passou. A regra vive no texto-fonte — no runtime as duas leituras são indistinguíveis —,
+  // então só a estática a defende (r78c). Quem lê a taxa de hoje é `currentRate()`; quem lê a taxa
+  // da época é `histRate(entrada)`. Caminho novo que pule o par derruba isto sozinho.
+  await suite('Estático — a taxa viva da ⭐ é lida por um lugar só (histórico usa a congelada)', async () => {
+    const usos = [...HTML.matchAll(/.{0,64}state\.pointValueBRL.{0,24}/g)].map((m) => m[0]);
+    check('o app realmente lê a taxa em algum lugar', usos.length > 0, 'derivação secou (r90c)');
+    const fora = usos.filter((s) => !/function currentRate\(\)/.test(s) && !/state\.pointValueBRL\s*=[^=]/.test(s));
+    check(`as ${usos.length} referências à taxa passam por currentRate()/histRate()`, fora.length === 0,
+      'lendo a taxa de hoje fora do par: ' + JSON.stringify(fora));
+
+    // O par da regra acima: `histRate` tem de existir e cair na taxa atual só na falta do carimbo.
+    check('histRate() existe e é o único fallback para entrada sem carimbo',
+      /function histRate\(h\)\{[^}]*rateBRL[^}]*currentRate\(\)/.test(HTML));
   });
 
   // §37: as três regras invioláveis da página de apresentação envelhecem em silêncio — nada no
@@ -598,6 +616,197 @@ function veredito() {
     await settle(1400);
     check('valor do ponto do PC chega à nuvem', (((cloudSettings() || {}).values || {}).pointValueBRL) === 0.25,
       'nuvem: ' + JSON.stringify(((cloudSettings() || {}).values || {}).pointValueBRL));
+  });
+
+  // ---- Taxa da ⭐ congelada por semana arquivada ----------------------------------------------
+  // `weekly_payments` guarda CONTAGEM de estrelas, não valor. Sem carimbo de taxa, cada carga da
+  // nuvem refazia `money_stars × taxa de hoje` e o `Object.assign` sobrescrevia o `moneyBRL` local:
+  // subir o valor da ⭐ em Configurações reprecificava TODO o histórico, inclusive semanas já pagas.
+  // O relato do usuário é sobre o histórico, mas o defeito não está no render — está na carga.
+  const SEM = { start: '2026-08-10', end: '2026-08-16' };
+  const HIST_ID = 'hist_ana_' + SEM.start;
+  const paidAt = '2026-08-17T10:00:00.000Z';
+  const semanaArquivada = () => ({
+    id: HIST_ID, childId: 'ana', childName: 'Ana', weekStart: SEM.start, weekEnd: SEM.end,
+    totalStars: 50, moneyBRL: 5, goalStars: 0, tasksApproved: 10, paid: true, paidAt,
+    // sem `rateBRL`: é exatamente a entrada que existe hoje no aparelho do usuário
+  });
+  const linhaLegada = () => ({
+    family_id: 'fam1', child_id: 'ana', week_start_date: SEM.start, week_end_date: SEM.end,
+    total_points: 50, goal_stars: 0, money_stars: 50, paid_at: paidAt,
+    // sem `point_value_brl`: linha gravada por um build anterior a esta correção
+  });
+  const linhaDoBanco = () => shared.tables.weekly_payments.find((r) => r.week_start_date === SEM.start) || {};
+
+  await suite('Taxa congelada — mudar o valor da ⭐ não repreça semana já fechada', async () => {
+    shared.tables.families[0].settings = null;
+    shared.tables.weekly_payments = [linhaLegada()];
+    const dev = await bootDevice({
+      familyId: 'fam1', familyName: 'Família Teste', childId: 'ana',
+      childrenList: [{ id: 'ana', name: 'Ana' }], pointValueBRL: 0.1, weekHistory: [semanaArquivada()],
+    });
+
+    // Migração (1º boot deste build): a entrada legada é congelada na taxa local, que é a que
+    // produziu o `moneyBRL` gravado — carimbar depois do pull usaria a taxa de outro aparelho.
+    check('a semana legada foi congelada na taxa vigente à época',
+      ev(dev, "state.weekHistory[0].rateBRL") === 0.1, 'rateBRL: ' + ev(dev, 'state.weekHistory[0].rateBRL'));
+
+    // r113: ANDA até o estado pelo caminho do usuário (painel → aba → campo → botão real), em vez
+    // de arrumar `state.pointValueBRL` na mão — é o caminho que o relato descreve.
+    ev(dev, "showMode('parent'); setParentTab('settings');");
+    ev(dev, "document.getElementById('settingPointValue').value='0.50';" +
+            "document.getElementById('settingPointValueSaveBtn').click();");
+    check('o botão de Configurações realmente salvou a taxa nova',
+      ev(dev, 'state.pointValueBRL') === 0.5, 'leu: ' + ev(dev, 'state.pointValueBRL'));
+
+    check('a semana arquivada mantém o valor da época (R$ 5,00)',
+      ev(dev, 'state.weekHistory[0].moneyBRL') === 5 && ev(dev, 'state.weekHistory[0].rateBRL') === 0.1,
+      'moneyBRL: ' + ev(dev, 'state.weekHistory[0].moneyBRL'));
+
+    // ESTE é o ponto que reprecificava: a carga do Supabase refazia o valor na taxa de hoje.
+    await ev(dev, 'loadWeekHistoryFromSupabase()');
+    await settle(200);
+    const h = JSON.parse(ev(dev, 'JSON.stringify(state.weekHistory[0])') || '{}');
+    check('a carga da nuvem NÃO repreça a semana paga (era o bug: 50⭐ × 0,50 = R$ 25)',
+      h.moneyBRL === 5 && h.rateBRL === 0.1, 'entrada depois da carga: ' + JSON.stringify(h));
+
+    ev(dev, 'renderHistory()');
+    const card = String(ev(dev, "document.getElementById('historyContent').textContent") || '');
+    check('o card do Histórico exibe o valor da época', /R\$\s*5,00/.test(card) && !/R\$\s*25,00/.test(card),
+      'card: ' + card.slice(0, 200));
+    check('e a contagem de ⭐ do card sai da taxa da época, não da de hoje', /50⭐/.test(card) && !/10⭐/.test(card),
+      'card: ' + card.slice(0, 200));
+
+    // A outra metade do pedido: a semana EM CURSO tem de seguir a taxa nova.
+    check('a semana em curso passa a valer a taxa nova',
+      ev(dev, "buildLiveCurrentWeekEntry('ana').rateBRL") === 0.5,
+      'live: ' + ev(dev, "buildLiveCurrentWeekEntry('ana').rateBRL"));
+
+    dev.window.close();
+  });
+
+  // Por que a migração roda ANTES do bloco de sync, e não depois: neste aparelho a semana foi
+  // arquivada a R$ 0,10, mas quem mudou a taxa foi o OUTRO — a nuvem já traz 0,50. No boot a ordem
+  // é `seedHistoryRates` → `syncSettingsWithSupabase` (adota 0,50) → `loadWeekHistoryFromSupabase`.
+  // Carimbar depois do pull usaria a taxa de outro aparelho e reprecificaria a semana já paga.
+  await suite('Taxa congelada — a migração carimba antes de a nuvem trazer a taxa nova', async () => {
+    shared.tables.weekly_payments = [linhaLegada()];
+    shared.tables.families[0].settings = {
+      v: 2, values: { pointValueBRL: 0.5 }, meta: { pointValueBRL: Date.now() },
+    };
+    const dev = await bootDevice({
+      familyId: 'fam1', familyName: 'Família Teste', childId: 'ana',
+      childrenList: [{ id: 'ana', name: 'Ana' }], pointValueBRL: 0.1, weekHistory: [semanaArquivada()],
+    });
+    check('o aparelho adotou a taxa nova da nuvem (senão o cenário não é o do relato)',
+      ev(dev, 'state.pointValueBRL') === 0.5, 'leu: ' + ev(dev, 'state.pointValueBRL'));
+    const h = JSON.parse(ev(dev, 'JSON.stringify(state.weekHistory[0])') || '{}');
+    check('e a semana paga ficou congelada na taxa LOCAL da época, não na que chegou da nuvem',
+      h.rateBRL === 0.1 && h.moneyBRL === 5, 'entrada: ' + JSON.stringify(h));
+    dev.window.close();
+  });
+
+  // O ponto de congelamento do fluxo normal: a virada de domingo. E o re-arquivo do mesmo domingo
+  // (reArchivePrevWeekFromSupabase) completa as INSTÂNCIAS da semana — não é motivo para repreçar.
+  await suite('Taxa congelada — a virada de semana carimba, e o re-arquivo não repreça', async () => {
+    shared.tables.families[0].settings = null;
+    shared.tables.weekly_payments = [];
+    const dev = await bootDevice({
+      familyId: 'fam1', familyName: 'Família Teste', childId: 'ana',
+      childrenList: [{ id: 'ana', name: 'Ana' }], pointValueBRL: 0.1,
+      tasks: [{ id: 't1', childId: 'ana', title: 'Arrumar a cama', icon: '🛏️', points: 5, rewardType: 'money', frequency: 'daily' }],
+    });
+    const inst = (n) => JSON.stringify(
+      Array.from({ length: n }, (_, i) => ({ id: 'i' + i, childId: 'ana', taskId: 't1', date: '2026-08-1' + i, status: 'approved', approvedStars: 5 })));
+
+    await ev(dev, "archiveWeek('" + SEM.start + "','" + SEM.end + "'," + inst(2) + ")");
+    await settle(300);
+    check('a semana arquivada nasce com a taxa da virada',
+      ev(dev, 'state.weekHistory[0].rateBRL') === 0.1 && ev(dev, 'state.weekHistory[0].moneyBRL') === 1,
+      'entrada: ' + ev(dev, 'JSON.stringify(state.weekHistory[0])'));
+    check('e a linha da nuvem leva a taxa junto', linhaDoBanco().point_value_brl === 0.1,
+      'linha: ' + JSON.stringify(linhaDoBanco()));
+
+    // Responsável aumenta a ⭐ e, no mesmo domingo, o re-arquivo roda com as instâncias completas.
+    ev(dev, 'state.pointValueBRL=0.5; saveState();');
+    await ev(dev, "archiveWeek('" + SEM.start + "','" + SEM.end + "'," + inst(3) + ")");
+    await settle(300);
+    check('o re-arquivo completa as ⭐ e mantém a taxa da época (15⭐ × 0,10 = R$ 1,50)',
+      ev(dev, 'state.weekHistory[0].totalStars') === 15 &&
+      ev(dev, 'state.weekHistory[0].rateBRL') === 0.1 &&
+      ev(dev, 'state.weekHistory[0].moneyBRL') === 1.5,
+      'entrada: ' + ev(dev, 'JSON.stringify(state.weekHistory[0])'));
+
+    dev.window.close();
+  });
+
+  // A metade que só aparece com dois aparelhos: o outro nunca viu a semana, então não tem o que
+  // congelar localmente — a taxa da época precisa VIAJAR, e por isso vai em coluna nova (r94d3).
+  await suite('Taxa congelada — a taxa da época viaja para o 2º aparelho', async () => {
+    shared.tables.families[0].settings = null;
+    shared.tables.weekly_payments = [linhaLegada()];
+    const pcA = await bootDevice({
+      familyId: 'fam1', familyName: 'Família Teste', childId: 'ana',
+      childrenList: [{ id: 'ana', name: 'Ana' }], pointValueBRL: 0.1, weekHistory: [semanaArquivada()],
+    });
+    ev(pcA, 'state.pointValueBRL=0.5; saveState();');
+    await settle(1400);
+
+    // Desfazer o pagamento regrava a linha. Com a taxa de HOJE, `moneyBRL/taxa` daria 10⭐ — uma
+    // contagem que a semana nunca teve, gravada de volta na nuvem e permanente.
+    await ev(pcA, "unmarkHistoryPaid('" + HIST_ID + "')");
+    await settle(400);
+    const linha = linhaDoBanco();
+    check('a linha guarda a taxa da época em coluna própria', linha.point_value_brl === 0.1,
+      'linha: ' + JSON.stringify(linha));
+    check('e as ⭐ monetárias continuam 50 (a taxa de hoje gravaria 10)', linha.money_stars === 50,
+      'money_stars: ' + linha.money_stars);
+
+    // Aparelho novo, sem histórico local: só a nuvem responde quanto a semana valia.
+    const cel = await bootDevice({ familyId: 'fam1', familyName: 'Família Teste', childId: 'ana', childrenList: [{ id: 'ana', name: 'Ana' }] });
+    check('o 2º aparelho adotou a taxa nova da família', ev(cel, 'state.pointValueBRL') === 0.5);
+    const hb = JSON.parse(ev(cel, "JSON.stringify((state.weekHistory||[]).find(function(x){return x.id==='" + HIST_ID + "'})||null)") || 'null');
+    check('e mesmo assim vê a semana pelo valor da época (R$ 5,00, não R$ 25)',
+      !!hb && hb.moneyBRL === 5 && hb.rateBRL === 0.1, 'no 2º aparelho: ' + JSON.stringify(hb));
+
+    cel.window.close();
+    pcA.window.close();
+  });
+
+  // r9/§15: a coluna nova derruba o upsert INTEIRO no PostgREST de quem não rodou o ALTER — não só
+  // o campo novo. Sem o reenvio, o pagamento deixaria de ser registrado.
+  await suite('Taxa congelada — coluna `point_value_brl` ausente degrada sem perder o pagamento', async () => {
+    shared.tables.families[0].settings = null;
+    shared.tables.weekly_payments = [linhaLegada()];
+    const original = shared.from;
+    let recusas = 0;
+    shared.from = (t) => {
+      const b = original(t);
+      if (t !== 'weekly_payments') return b;
+      return Object.assign({}, b, {
+        upsert(p, o) {
+          if (p && p.point_value_brl !== undefined) {
+            recusas++;
+            return { then: (res) => Promise.resolve({ data: null, error: { message: "Could not find the 'point_value_brl' column of 'weekly_payments' in the schema cache" } }).then(res) };
+          }
+          return b.upsert(p, o);
+        },
+      });
+    };
+    const dev = await bootDevice({
+      familyId: 'fam1', familyName: 'Família Teste', childId: 'ana',
+      childrenList: [{ id: 'ana', name: 'Ana' }], pointValueBRL: 0.1, weekHistory: [semanaArquivada()],
+    });
+    await ev(dev, "unmarkHistoryPaid('" + HIST_ID + "')");
+    await settle(400);
+    check('o Supabase recusou a coluna nova (senão o cenário não é o da degradação)', recusas > 0);
+    check('o app marcou a coluna como ausente', ev(dev, '_payRateColumnMissing') === true);
+    check('o pagamento foi registrado assim mesmo (reenvio sem a coluna)', linhaDoBanco().paid_at === null,
+      'linha: ' + JSON.stringify(linhaDoBanco()));
+    check('e a taxa congelada continua valendo localmente',
+      ev(dev, 'state.weekHistory[0].moneyBRL') === 5 && ev(dev, 'state.weekHistory[0].rateBRL') === 0.1);
+    shared.from = original;
+    dev.window.close();
   });
 
   await suite('r36(b) — coluna `settings` ausente degrada para local-only', async () => {

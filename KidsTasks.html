@@ -531,7 +531,7 @@
           <div class="card" style="box-shadow:none;background:var(--surface);margin-bottom:12px">
             <div class="bd">
               <h3 style="margin:0 0 10px;font-size:16px">Conversão para dinheiro</h3>
-              <p style="margin:0 0 12px;color:var(--slate);font-size:14px;line-height:1.5">Define quanto vale cada ⭐ em dinheiro para tarefas 💰.</p>
+              <p style="margin:0 0 12px;color:var(--slate);font-size:14px;line-height:1.5">Define quanto vale cada ⭐ em dinheiro para tarefas 💰.<br/><strong>Vale da semana em curso em diante.</strong> Semanas já fechadas no Histórico mantêm o valor que a ⭐ tinha na época.</p>
               <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
                 <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--slate)">Valor por ⭐ (R$)<input class="input" id="settingPointValue" type="number" min="0.01" step="0.01" style="width:140px"/></label>
                 <button class="btn btn-secondary" id="settingPointValueSaveBtn" type="button">Salvar taxa</button>
@@ -1458,7 +1458,7 @@ function computeSummary(){
   const todayApproved=todayInst.filter(i=>i.status==='approved');
   const todayApprovedStars=todayApproved.reduce((s,inst)=>{const t=tmap.get(inst.taskId);return s+(t?getInstanceStars(inst,t):0);},0);
   const weekApprovedStars=weekApproved.reduce((sum,inst)=>{const task=tmap.get(inst.taskId);return sum+(task?getInstanceStars(inst,task):0);},0);
-  const rate=parseFloat(state.pointValueBRL)||0.10;
+  const rate=currentRate();
   let moneyStars=0, goalStars=0;
   weekApproved.forEach(inst=>{const task=tmap.get(inst.taskId); if(!task) return; const s=getInstanceStars(inst,task); const rt=task.rewardType||'money';
     if(rt==='money'||rt==='both') moneyStars+=s;
@@ -2405,8 +2405,8 @@ function renderParent(){
   // settings
   $('#settingWeekMode').value=state.weekMode||'dom-sab';
   $('#toggleShowMoney').checked=!!state.showMoneyToChild;
-  $('#settingPointValue').value=parseFloat(state.pointValueBRL)||0.10;
-  $('#settingPointValuePreview').textContent=`10 ⭐ = ${(10*(parseFloat(state.pointValueBRL)||0.10)).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}`;
+  $('#settingPointValue').value=currentRate();
+  $('#settingPointValuePreview').textContent=`10 ⭐ = ${(10*(currentRate())).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}`;
   $('#settingParentPinEnabled').checked=!!state.parentPinEnabled;
   $('#familyNameInput').value=state.familyName||'';
   renderChildrenList();
@@ -2482,6 +2482,52 @@ async function forceWeekReset(){
 }
 
 // ── Histórico de semanas ──
+// 🧊 A taxa ⭐→R$ é CONGELADA por semana arquivada (`rateBRL`). Aumentar o valor da estrela em
+// Configurações vale para a semana EM CURSO; semana já fechada mantém o que valia na época.
+// Sem o carimbo, `weekly_payments` guarda só contagem de estrelas e o app reprecificava TODO o
+// histórico — inclusive o já pago — a cada carga da nuvem.
+// Entrada legada (arquivada antes deste build) não tem carimbo: `histRate` cai na taxa atual, que
+// é o único valor conhecido, e o `seedHistoryRates` a congela no 1º boot para a deriva parar aí.
+function currentRate(){ return parseFloat(state.pointValueBRL)||0.10; }
+function histRate(h){ const r=parseFloat(h&&h.rateBRL); return r>0?r:currentRate(); }
+function seedHistoryRates(){
+  let changed=false;
+  (state.weekHistory||[]).forEach(h=>{ if(!(parseFloat(h.rateBRL)>0)){ h.rateBRL=currentRate(); changed=true; } });
+  if(changed) saveState();
+}
+
+// Caminho ÚNICO de escrita de `weekly_payments` (r66b): três chamadas gravavam a mesma linha e
+// envelheceriam desencontradas. `point_value_brl` é coluna NOVA (r94) — o cliente antigo nem a lê —,
+// mas quem ainda não rodou o ALTER perde a linha INTEIRA no PostgREST, não só o campo novo: o erro
+// que cita a coluna reenvia sem ela (r9/§15) e a taxa segue local até a migração.
+let _payRateColumnMissing=false;
+const _PAY_CONFLICT={onConflict:'family_id,child_id,week_start_date,week_end_date'};
+async function _upsertWeeklyPayment(row, rate){
+  if(!_payRateColumnMissing && rate>0){
+    const {error}=await supabaseClient.from('weekly_payments').upsert(Object.assign({point_value_brl:rate},row),_PAY_CONFLICT);
+    if(!error) return {error:null};
+    if(!/point_value_brl/i.test(error.message||'')) return {error};
+    _payRateColumnMissing=true;
+    console.warn('[Pagamentos] coluna `point_value_brl` ausente no Supabase — a taxa congelada fica local até o ALTER TABLE');
+  }
+  return await supabaseClient.from('weekly_payments').upsert(row,_PAY_CONFLICT);
+}
+// Leitura com a mesma degradação: nomear a coluna ausente derrubaria o SELECT inteiro.
+const _PAY_COLS='family_id,child_id,week_start_date,week_end_date,total_points,goal_stars,money_stars,paid_at';
+function _selectPayments(cols){
+  return supabaseClient.from('weekly_payments').select(cols)
+    .eq('family_id',state.familyId).order('week_start_date',{ascending:false}).limit(52);
+}
+async function _fetchWeeklyPayments(){
+  if(!_payRateColumnMissing){
+    const r=await _selectPayments(_PAY_COLS+',point_value_brl');
+    if(!r.error) return r;
+    if(!/point_value_brl/i.test((r.error.message)||'')) return r;
+    _payRateColumnMissing=true;
+  }
+  return await _selectPayments(_PAY_COLS);
+}
+
 function fmtWeekLabel(start, end){
   const opts={day:'2-digit',month:'short'};
   const s=new Date(start+'T12:00:00'), e=new Date(end+'T12:00:00');
@@ -2491,19 +2537,21 @@ function fmtWeekLabel(start, end){
 async function loadWeekHistoryFromSupabase(){
   if(!supabaseClient||!state.familyId) return;
   try{
-    const {data,error}=await supabaseClient.from('weekly_payments')
-      .select('family_id,child_id,week_start_date,week_end_date,total_points,goal_stars,money_stars,paid_at')
-      .eq('family_id',state.familyId)
-      .order('week_start_date',{ascending:false}).limit(52);
+    const {data,error}=await _fetchWeeklyPayments();
     if(error||!data) return;
     if(!state.weekHistory) state.weekHistory=[];
-    const rate=parseFloat(state.pointValueBRL)||0.10;
     data.forEach(row=>{
       const histId=`hist_${row.child_id}_${row.week_start_date}`;
       const existing=state.weekHistory.find(h=>h.id===histId);
       const child=state.childrenList.find(c=>c.id===row.child_id);
       const gs=row.goal_stars||0, ts=row.total_points||0;
       const ms=row.money_stars!=null?row.money_stars:null;
+      // Taxa da ÉPOCA, em ordem de confiança: a que veio da nuvem → a já congelada aqui → a atual
+      // (só para semana que este aparelho nunca viu, onde não existe outra fonte). Era este ponto
+      // que repreçava o histórico inteiro: a linha guarda estrelas, e o valor era refeito na taxa
+      // do momento a cada carga, sobrescrevendo o `moneyBRL` local pelo `Object.assign` abaixo.
+      const _remoteRate=parseFloat(row.point_value_brl);
+      const rate=_remoteRate>0?_remoteRate:histRate(existing);
       let computedMoney;
       if(ms!=null&&ms>0){ computedMoney=ms*rate; } // BD tem valor positivo: confiável
       else if((existing?.moneyBRL||0)>0){ computedMoney=existing.moneyBRL; } // preserva local (evita sobrescrever com DEFAULT 0 do BD)
@@ -2516,7 +2564,7 @@ async function loadWeekHistoryFromSupabase(){
       const entry={
         id:histId, childId:row.child_id, childName:child?.name||'Criança',
         weekStart:row.week_start_date, weekEnd:row.week_end_date,
-        totalStars:ts, moneyBRL:computedMoney, goalStars:gs,
+        totalStars:ts, moneyBRL:computedMoney, goalStars:gs, rateBRL:rate,
         tasksApproved:existing?.tasksApproved||0,
         paid:!!row.paid_at, paidAt:row.paid_at||null
       };
@@ -2548,7 +2596,7 @@ function renderHistory(){
         const sum=computeSummary();
         entry={id:`live_${c.id}_${currentWeekStart}`,childId:c.id,childName:c.name||'Criança',
           weekStart:currentWeekStart,weekEnd:getWeekRange().end,
-          totalStars:sum.weekApprovedStars,moneyBRL:sum.moneyBRL,
+          totalStars:sum.weekApprovedStars,moneyBRL:sum.moneyBRL,rateBRL:currentRate(),
           goalStars:sum.goalStars,tasksApproved:sum.weekApprovedCount,
           paid:archivedCurrent?.paid||false,paidAt:archivedCurrent?.paidAt||null,
           _archivedId:archivedCurrent?.id,_isLive:true};
@@ -2589,9 +2637,13 @@ function renderHistory(){
       :h._isLive
         ?`<span style="color:var(--warning);font-size:12px;font-weight:600">📊 Em andamento</span>`
         :`<button type="button" onclick="openPaymentModal('${h.id}')" class="btn btn-primary" style="height:36px;font-size:13px">💳 Marcar pago</button>`;
-    // Estrelas monetárias: deriva de moneyBRL e taxa (evita fórmula errada ts-gs com tarefas 'Ambos')
-    const _rate=parseFloat(state.pointValueBRL)||0.10;
+    // Estrelas monetárias: deriva de moneyBRL e da taxa DA ENTRADA (evita a fórmula errada ts-gs com
+    // tarefas 'Ambos'). Usar a taxa de hoje aqui mostraria uma contagem de ⭐ que a semana nunca teve.
+    const _rate=histRate(h);
     const moneyStars=_rate>0?Math.round(h.moneyBRL/_rate):0;
+    // Só aparece quando a taxa mudou desde então — é a resposta a "por que não bate com o valor de hoje?"
+    const _rateNota=(!h._isLive&&Math.abs(_rate-currentRate())>1e-9)
+      ? ` · ${_rate.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}/⭐ na época` : '';
     div.innerHTML=`
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
         <div>
@@ -2602,7 +2654,7 @@ function renderHistory(){
       </div>
       <div class="hist-grid">
         <div class="hist-stat"><div class="v">⭐ ${h.totalStars}</div><div class="k">⭐ Total aprovadas</div></div>
-        <div class="hist-stat"><div class="v" style="font-size:15px">${h.moneyBRL.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</div><div class="k">💰 A receber (${moneyStars}⭐)</div></div>
+        <div class="hist-stat"><div class="v" style="font-size:15px">${h.moneyBRL.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</div><div class="k">💰 A receber (${moneyStars}⭐)${_rateNota}</div></div>
         <div class="hist-stat"><div class="v">🏆 ${h.goalStars||0}</div><div class="k">🏆 Em metas (pts)</div></div>
         <div class="hist-stat"><div class="v">✅ ${h.tasksApproved||'—'}</div><div class="k">Tarefas aprovadas</div></div>
       </div>`;
@@ -2622,7 +2674,7 @@ function renderChildHistory(){
   const liveEntry={
     id:`live_${cid}_${currentWeek.start}`,childId:cid,childName:active.name||'Criança',
     weekStart:currentWeek.start,weekEnd:currentWeek.end,
-    totalStars:sum.weekApprovedStars,moneyBRL:sum.moneyBRL,
+    totalStars:sum.weekApprovedStars,moneyBRL:sum.moneyBRL,rateBRL:currentRate(),
     goalStars:sum.goalStars,tasksApproved:sum.weekApprovedCount,
     paid:false,_isLive:true
   };
@@ -2880,12 +2932,11 @@ function resetLevelThresholds(){
 
 // Corrige moneyBRL=0 em entradas históricas de tarefas 'Ambos' salvas com fórmula antiga
 function fixHistoryMoneyBRL(){
-  const rate=parseFloat(state.pointValueBRL)||0.10;
   let changed=false;
   (state.weekHistory||[]).forEach(h=>{
     if((h.moneyBRL||0)===0&&h.totalStars>0&&(h.goalStars||0)===h.totalStars){
       const hasBoth=(state.tasks||[]).some(t=>(t.childId===h.childId||!t.childId)&&t.rewardType==='both');
-      if(hasBoth){ h.moneyBRL=h.totalStars*rate; changed=true; }
+      if(hasBoth){ h.moneyBRL=h.totalStars*histRate(h); changed=true; }
     }
   });
   if(changed) saveState();
@@ -2898,7 +2949,7 @@ function buildLiveCurrentWeekEntry(cid){
   const tmap=new Map(tasksForChild(cid).map(t=>[t.id,t]));
   const approved=instancesForChild(cid).filter(i=>i.date>=week.start&&i.date<=week.end&&i.status==='approved');
   let totalStars=0,moneyStars=0,goalStars=0;
-  const rate=parseFloat(state.pointValueBRL)||0.10;
+  const rate=currentRate(); // semana em curso: sempre na taxa de hoje (é ela que ainda pode mudar)
   approved.forEach(inst=>{
     const task=tmap.get(inst.taskId); if(!task) return;
     const s=getInstanceStars(inst,task); totalStars+=s;
@@ -2909,7 +2960,7 @@ function buildLiveCurrentWeekEntry(cid){
   return {
     id:`live_${cid}_${week.start}`, childId:cid, childName:child.name,
     weekStart:week.start, weekEnd:week.end,
-    totalStars, moneyBRL:moneyStars*rate, goalStars,
+    totalStars, moneyBRL:moneyStars*rate, goalStars, rateBRL:rate,
     tasksApproved:approved.length, paid:false, paidAt:null, _isLive:true
   };
 }
@@ -2918,7 +2969,6 @@ function buildLiveCurrentWeekEntry(cid){
 async function archiveWeek(prevWeekStart, prevWeekEnd, oldInstances){
   if(!prevWeekStart || !prevWeekEnd || !oldInstances.length) return;
   if(!state.weekHistory) state.weekHistory=[];
-  const rate=parseFloat(state.pointValueBRL)||0.10;
 
   // Arquiva para cada criança que tem instâncias na semana anterior
   const children=state.childrenList.length
@@ -2927,8 +2977,12 @@ async function archiveWeek(prevWeekStart, prevWeekEnd, oldInstances){
 
   for(const child of children){
     const cid=child.id; if(!cid) continue;
-    // Remove entrada parcial se já existir (garante totais corretos na virada de semana)
+    // Remove entrada parcial se já existir (garante totais corretos na virada de semana).
+    // O re-arquivo (reArchivePrevWeekFromSupabase, todo domingo) completa as INSTÂNCIAS da semana —
+    // não é motivo para reprecificar: a taxa congelada da entrada substituída vem junto.
     const staleIdx=(state.weekHistory||[]).findIndex(h=>h.childId===cid&&h.weekStart===prevWeekStart);
+    const stale=staleIdx>=0?state.weekHistory[staleIdx]:null;
+    const rate=stale?histRate(stale):currentRate();
     if(staleIdx>=0) state.weekHistory.splice(staleIdx,1);
 
     const childTasks=tasksForChild(cid);
@@ -2954,6 +3008,7 @@ async function archiveWeek(prevWeekStart, prevWeekEnd, oldInstances){
       totalStars,
       moneyBRL:moneyStars*rate,
       goalStars,
+      rateBRL:rate,
       tasksApproved:approved.length,
       paid:false,
       paidAt:null
@@ -2971,11 +3026,11 @@ async function archiveWeek(prevWeekStart, prevWeekEnd, oldInstances){
         if(sbRow && sbRow.total_points > totalStars){
           console.warn('[Archive] Supabase já tem dados mais completos (%d > %d) — upsert ignorado para child %s',sbRow.total_points,totalStars,cid);
         } else {
-          await supabaseClient.from('weekly_payments').upsert({
+          await _upsertWeeklyPayment({
             family_id:state.familyId, child_id:cid,
             week_start_date:prevWeekStart, week_end_date:prevWeekEnd,
             total_points:totalStars, goal_stars:goalStars, money_stars:moneyStars
-          },{onConflict:'family_id,child_id,week_start_date,week_end_date'});
+          },rate);
         }
       }catch(e){ console.error('[Archive] weekly_payments',e); }
     }
@@ -2996,19 +3051,21 @@ async function registerWeeklyPayment(){
    if(rt==='goal'||rt==='both') goalStars+=s;
    if(rt==='money'||rt==='both') moneyStars+=s;
  });
- const rate=parseFloat(state.pointValueBRL)||0.10;
+ // Congela aqui: o que se paga é o que a semana valia AGORA, e um aumento posterior da estrela
+ // não pode reescrever este registro.
+ const rate=currentRate();
  const moneyBRL=moneyStars*rate;
  const paidAt=new Date().toISOString();
  const payload={family_id:state.familyId, child_id:state.childId, week_start_date:week.start, week_end_date:week.end, total_points:totalStars, goal_stars:goalStars, money_stars:moneyStars, paid_at:paidAt};
- const {error}=await supabaseClient.from('weekly_payments').upsert(payload,{onConflict:'family_id,child_id,week_start_date,week_end_date'});
+ const {error}=await _upsertWeeklyPayment(payload,rate);
  if(error) throw error;
  state.weekPaid=true;
  // Atualiza histórico local se existir entrada
  if(state.weekHistory){
    const entry=state.weekHistory.find(h=>h.childId===cid && h.weekStart===week.start);
-   if(entry){ entry.paid=true; entry.paidAt=paidAt; entry.moneyBRL=moneyBRL; }
+   if(entry){ entry.paid=true; entry.paidAt=paidAt; entry.moneyBRL=moneyBRL; entry.rateBRL=rate; }
    else{
-     state.weekHistory.unshift({id:`hist_${cid}_${week.start}`,childId:cid,childName:(state.childrenList.find(c=>c.id===cid)?.name)||'Criança',weekStart:week.start,weekEnd:week.end,totalStars,moneyBRL,goalStars,tasksApproved:approved.length,paid:true,paidAt});
+     state.weekHistory.unshift({id:`hist_${cid}_${week.start}`,childId:cid,childName:(state.childrenList.find(c=>c.id===cid)?.name)||'Criança',weekStart:week.start,weekEnd:week.end,totalStars,moneyBRL,goalStars,rateBRL:rate,tasksApproved:approved.length,paid:true,paidAt});
    }
  }
  saveState();
@@ -3184,15 +3241,17 @@ async function unmarkHistoryPaid(histId){
   entry.paid=false; entry.paidAt=null; saveState();
   if(entry.weekStart===getWeekRange().start) state.weekPaid=false;
   if(supabaseClient&&state.familyId){
-    // Upsert com paid_at:null é mais confiável que UPDATE (garante que a linha existe com o valor correto)
-    const _rate=parseFloat(state.pointValueBRL)||0.10;
+    // Upsert com paid_at:null é mais confiável que UPDATE (garante que a linha existe com o valor
+    // correto). A taxa tem de ser a DA ENTRADA: com a de hoje, `moneyBRL/taxa` devolveria uma
+    // contagem de ⭐ que a semana nunca teve — e esta linha grava esse número de volta na nuvem.
+    const _rate=histRate(entry);
     const _mStars=_rate>0?Math.round((entry.moneyBRL||0)/_rate):0;
-    const {error}=await supabaseClient.from('weekly_payments').upsert({
+    const {error}=await _upsertWeeklyPayment({
       family_id:state.familyId, child_id:entry.childId,
       week_start_date:entry.weekStart, week_end_date:entry.weekEnd,
       total_points:entry.totalStars||0, goal_stars:entry.goalStars||0, money_stars:_mStars,
       paid_at:null
-    },{onConflict:'family_id,child_id,week_start_date,week_end_date'});
+    },_rate);
     if(error){ toast('Erro ao atualizar Supabase: '+error.message,'error'); return; }
   }
   updateHistoryBadge(); renderHistory(); renderAll();
@@ -3226,7 +3285,11 @@ async function importBackup(file){
       state[k]=data[k]; });
     // O saveState abaixo recarimba por diff as configs restauradas (hora atual), então a restauração
     // vence a nuvem no próximo merge em vez de ser reapagada por ela.
-    saveState(); ensureInstancesForToday(); renderAll();
+    saveState();
+    // Backup anterior a esta correção traz histórico sem `rateBRL`: sem carimbar aqui, a sessão
+    // inteira exibiria o histórico na taxa de hoje (só o próximo boot congelaria).
+    seedHistoryRates();
+    ensureInstancesForToday(); renderAll();
     toast('Backup importado ✅','ok');
   }catch(e){ toast('Erro ao importar: '+e.message,'error'); }
 }
@@ -3687,6 +3750,9 @@ function init(){
   populateIconSelect(document.getElementById('fIcon'), TASK_ICON_OPTIONS, '📌');
   populateIconSelect(document.getElementById('editIcon'), TASK_ICON_OPTIONS, '📌');
   populateIconSelect(document.getElementById('newGoalIcon'), GOAL_ICON_OPTIONS, '🎯');
+  // Antes do bloco de sync: carimba com a taxa LOCAL, que é a que produziu o `moneyBRL` gravado
+  // aqui. Depois do pull da nuvem já seria a taxa de outro aparelho.
+  seedHistoryRates();   // congela a taxa das semanas arquivadas antes deste build (migração 1x)
   fixHistoryMoneyBRL(); // corrige entradas salvas com fórmula errada para 'Ambos'
   seedSettingsMeta();   // carimba a config personalizada de antes do sync (só o que difere do padrão)
   showMode('child');

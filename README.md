@@ -215,6 +215,7 @@ CREATE TABLE public.weekly_payments (
   total_points    integer     NOT NULL DEFAULT 0,
   goal_stars      integer     NOT NULL DEFAULT 0,
   money_stars     integer     NOT NULL DEFAULT 0,
+  point_value_brl numeric(10,4),
   paid_at         timestamptz,
   created_at      timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT weekly_payments_unique_week
