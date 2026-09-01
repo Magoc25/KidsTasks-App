@@ -5,6 +5,55 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [2.5.0] — Setembro 2026
+
+### ⚙️ Migração — quem já configurou o Supabase
+
+Rode uma vez no **SQL Editor** do seu projeto Supabase. Sem isso o app continua funcionando, mas duas coisas ficam **presas a cada aparelho** em vez de sincronizadas — sem erro na tela, então não há como perceber sozinho:
+
+```sql
+ALTER TABLE public.families ADD COLUMN IF NOT EXISTS settings jsonb;
+ALTER TABLE public.weekly_payments ADD COLUMN IF NOT EXISTS point_value_brl numeric(10,4);
+```
+
+- `families.settings` — as **configurações da família** (valor da ⭐, período semanal, níveis, PIN, gênero e chave PIX por criança). Sem a coluna, o que você ajusta num aparelho não aparece no outro.
+- `weekly_payments.point_value_brl` — o **valor que a ⭐ tinha em cada semana já fechada**. Sem a coluna, o congelamento vale só no aparelho onde a semana foi arquivada; um segundo aparelho que nunca viu aquela semana a exibe pelo valor de hoje.
+
+Quem está começando agora não precisa de nada: o bloco de criação no README já traz as duas colunas.
+
+### 🆕 Adicionado
+
+- **Aba 📊 Estatísticas** no painel do Responsável: acumulados de todas as semanas — estrelas, tarefas aprovadas, conquistas entregues, semanas registradas, total gerado (pago × pendente), média por semana, melhor semana e **ranking por criança**.
+- **🎮 Minha Aventura**, no painel da criança: os mesmos números em linguagem para ela. **Dez níveis** (🌱 Brotinho → 👑 Lenda) com barra de progresso, **mascote** que muda conforme sobe, **confete e som** ao subir de nível, e a **trilha completa** (🗺️ *Sua jornada*) mostrando o que já conquistou, onde está e quanto falta para o próximo.
+- **Níveis editáveis pelo responsável** — os limiares de estrelas de cada nível saem do padrão e podem ser ajustados em Configurações, com **Restaurar padrão** a um clique.
+- **Gênero por criança nos títulos de nível.** Cada criança pode ser 👧 Menina, 👦 Menino ou 🙂 Neutro, e os títulos acompanham (Herói / Heroína / Craque; Campeão / Campeã / Fera; Mago / Maga / Mestre). O padrão é neutro, com nomes que servem a qualquer criança.
+- **📖 Como funciona** — botão novo que abre uma página explicando o app para quem nunca vai abrir o GitHub: o que ele faz, onde os dados ficam, **tudo o que sai do aparelho** e as limitações conhecidas, com um interruptor entre leitura simples e técnica.
+
+### 🔧 Melhorado
+
+- **As configurações da família agora sincronizam.** Antes, tudo o que se ajustava em Configurações valia **só no aparelho onde foi ajustado** — o celular abria no padrão. Agora valor da ⭐, período semanal, mostrar dinheiro à criança, limiares de nível, gênero e chave PIX por criança e o PIN viajam entre dispositivos, com registro de quem mudou por último: um aparelho que nunca mexeu numa opção **não empurra o próprio padrão** por cima do que você configurou no outro.
+- **Pagamento só de semana já virada.** Antes dava para registrar o pagamento da semana em andamento. Agora o botão só aparece depois que a semana fecha; a semana em curso mostra **📊 Em andamento**, e havendo semana passada pendente o app leva você até ela.
+- **Tabelas do Responsável no celular** ganharam uma sombra na borda direita enquanto sobrar coluna escondida — antes a coluna de **Ações** nascia fora da tela sem nenhum sinal, e os botões pareciam não existir.
+- **Painel da criança mais enxuto:** *Minhas Semanas* e *Minhas Conquistas* viraram seções recolhíveis e iniciam fechadas.
+- O painel do Responsável **sempre abre na aba Semana**.
+- **Contador ao vivo `0/200`** no comentário das avaliações — o limite já existia, mas cortava em silêncio.
+- **Cabeçalho enxuto:** o título da aba mostrava o nome do app duas vezes; agora é só **KidsTasks**.
+- **Instalação no Mac documentada.** A tabela "Instalar como app" do README não tinha nenhuma linha de macOS, e o rótulo *"no PC"* deixava o Mac de fora. Agora cobre Safari (**Arquivo → Adicionar ao Dock**), Chrome/Edge no Mac e Windows/Linux.
+- **Testes automáticos a cada envio.** O app passou a ser verificado sozinho no GitHub Actions: dois aparelhos simulados contra um mesmo banco de teste, conferindo que a sincronização não perde configuração. São **77 verificações**, e cada uma foi validada quebrando o app de propósito para confirmar que ela realmente falha — teste que nunca falhou não prova nada.
+
+### 🐛 Correções
+
+- **Aumentar o valor da ⭐ reprecificava o histórico inteiro, inclusive semanas já pagas.** É esperado que o valor da estrela suba com o tempo — mas o aumento voltava no tempo: uma semana fechada por R$ 5,00 passava a exibir R$ 25,00 depois de a taxa ir de R$ 0,10 para R$ 0,50. Agora **cada semana arquivada guarda o valor que a ⭐ tinha na época**, e o card mostra esse valor quando ele difere do de hoje. A semana em curso continua seguindo o valor novo — é ela que ainda pode mudar. ⚠️ Semanas que já haviam sido reprecificadas **antes** desta correção não voltam ao valor original: ele não estava guardado em lugar nenhum.
+- **Configurar uma criança podia apagar a configuração da outra.** Valia para o gênero e para a chave PIX: se o computador definia o da Ana e o celular — que ainda não tinha recebido essa mudança — definia o do Bruno, **a Ana desaparecia dos dois** no carregamento seguinte, sem erro e sem aviso. Agora cada criança tem o próprio registro e a fusão é criança a criança: o que existe só num aparelho nunca é apagado pelo outro.
+- **Importar backup deixava duas configurações para trás** — o período semanal e as chaves PIX por criança não eram restaurados, e a criança ficava sem a chave depois de uma restauração.
+- **A versão no rodapé podia mentir** sobre qual app estava rodando: era buscada do site, não do código em execução. Num build antigo preso em cache, mostrava a versão nova e escondia exatamente o problema que se queria enxergar.
+- **Desfazer um pagamento** gravava de volta uma contagem de estrelas calculada pelo valor de hoje, corrompendo o registro da semana.
+- **Contagem de dispositivos ativos** passou a considerar só dispositivos recorrentes — aba anônima, dados limpos e reinstalações geravam identificadores efêmeros que inflavam o número.
+- **O aviso de privacidade descrevia a foto da criança como "cor de avatar".** O app permite ao responsável associar uma **foto** a cada criança; ela é escolhida por ele, redimensionada no próprio aparelho e guardada com os demais dados — nunca enviada ao desenvolvedor. Os documentos agora descrevem isso como é.
+- **Blindagem de interface:** um elemento escondido pelo código podia continuar visível na tela.
+
+---
+
 ## [2.4.1] — Junho 2026
 
 ### 🔧 Melhorias

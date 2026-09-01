@@ -1,6 +1,7 @@
-/* KidsTasks — Service Worker (cache kidstasks-v71) */
+/* KidsTasks — Service Worker. O nome do cache é o `CACHE_NAME` abaixo: fonte única, para o
+   comentário não virar uma segunda cópia que envelhece sozinha (r72a). */
 
-const CACHE_NAME = 'kidstasks-v71';
+const CACHE_NAME = 'kidstasks-v72';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
