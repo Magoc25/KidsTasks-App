@@ -29,7 +29,7 @@ Os dados abaixo são tratados exclusivamente pelo usuário. O desenvolvedor não
 | Dado | Onde fica | Quem controla |
 |---|---|---|
 | Nome da família | localStorage do dispositivo / Supabase pessoal | Usuário |
-| Nomes das crianças, cor de avatar | localStorage do dispositivo / Supabase pessoal | Usuário |
+| Nomes das crianças e **foto da criança** (opcional, escolhida pelo responsável e redimensionada no aparelho) | localStorage do dispositivo / Supabase pessoal | Usuário |
 | Tarefas, instâncias, pagamentos, metas | localStorage do dispositivo / Supabase pessoal | Usuário |
 | PIN do responsável | localStorage do dispositivo | Usuário |
 | Chave e URL do Supabase pessoal | localStorage do dispositivo | Usuário |

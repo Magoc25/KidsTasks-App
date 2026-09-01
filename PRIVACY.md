@@ -52,7 +52,7 @@ O KidsTasks opera em três camadas distintas, com responsabilidades diferentes s
 
 Todos os dados operacionais do app ficam no `localStorage` do navegador no seu próprio dispositivo:
 
-- Dados de família e crianças (nome, cor de avatar)
+- Dados de família e crianças (nome e, se o responsável escolher adicionar, uma **foto** da criança — selecionada de um arquivo do próprio aparelho, redimensionada localmente e guardada junto com os demais dados)
 - Tarefas, instâncias, pagamentos semanais e metas
 - Configurações do app (chave e URL do seu Supabase, PIN do responsável)
 - Preferências e estado da interface
@@ -77,6 +77,7 @@ O KidsTasks é destinado a responsáveis legais para organizar as tarefas de seu
 - **O desenvolvedor não coleta, não acessa e não armazena dados identificáveis de crianças** no Supabase compartilhado (Camada 1).
 - As avaliações (Camada 1) são ações voluntárias de adultos — o app não solicita nem armazena dados de crianças no sistema de avaliações.
 - O identificador anônimo de dispositivo (Camada 1) não contém qualquer informação pessoal de crianças.
+- **Foto da criança (opcional).** O app permite ao responsável associar uma foto a cada criança. Ela é escolhida por ele, redimensionada **no próprio aparelho** e gravada como os demais dados: fica na Camada 2 e, se o responsável tiver configurado o Supabase pessoal, é replicada para o banco **dele** (Camada 3). **Em nenhum momento a foto é enviada ao desenvolvedor** — não existe caminho no app entre os dados das crianças e a Camada 1. Adicionar a foto é opcional e o app funciona sem ela.
 - O app **não é destinado ao uso direto por menores** — é uma ferramenta para responsáveis. A interação da criança com o app ocorre mediante supervisão do responsável no mesmo dispositivo.
 
 ---
