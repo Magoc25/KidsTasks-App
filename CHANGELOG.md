@@ -5,6 +5,23 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [2.6.0] — Novembro 2026
+
+Não há migração nesta versão: nada a rodar no Supabase.
+
+### 🔧 Melhorado
+
+- **A ordem das tarefas agora sincroniza.** A ordem que você monta arrastando as tarefas (⠿) valia **só no aparelho onde foi arrastada**: o outro seguia na ordem antiga, sem erro nem aviso. Agora ela viaja junto com as configurações da família. Vale a ordem arrastada por último, e uma tarefa criada no outro aparelho depois do arraste entra no fim da lista. Quem já tinha arrumado a ordem antes desta versão não precisa arrastar de novo, porque a ordem já arrumada é enviada na primeira abertura.
+- **Abre mais rápido com sinal fraco.** Com internet que conecta e não responde, o app esperava a rede desistir, o que podia levar dezenas de segundos, antes de abrir a cópia salva no aparelho. Agora espera no máximo 3,5 s e abre a cópia; a versão nova, quando chega, fica guardada para a próxima abertura.
+
+### 🐛 Correções
+
+- **Uma falha passageira do site não tira mais o app do aparelho.** Se o servidor respondesse com erro no momento em que o app abria, a página de erro **substituía** a cópia salva, e a próxima abertura sem internet mostrava só "Offline". Agora só uma resposta boa entra na cópia, e um erro com cópia boa disponível abre a cópia. O mesmo vale para os ícones.
+- **O app abre sem internet também por link com parâmetros** (`?utm=…`, QR code): antes esse endereço não achava a cópia salva.
+- **Configurações recebidas de outro aparelho aparecem na hora.** Quando a sincronização que roda depois de um ajuste trazia algo novo do outro aparelho, a tela só mostrava na próxima abertura.
+
+---
+
 ## [2.5.0] — Setembro 2026
 
 ### ⚙️ Migração — quem já configurou o Supabase

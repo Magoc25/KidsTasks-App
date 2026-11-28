@@ -53,7 +53,11 @@ function createDb(seed) {
     const rows = () => tables[name];
     const match = (r) =>
       q.filters.every(([c, v]) => r[c] === v) &&
-      (!q.inFilter || q.inFilter[1].includes(r[q.inFilter[0]]));
+      (!q.inFilter || q.inFilter[1].includes(r[q.inFilter[0]])) &&
+      // `.or('child_id.eq.X,child_id.is.null')` — só a gramática que o app usa. Sem isto o
+      // loadTasksFromSupabase estourava calado no smoke, e nada depois dele na carga era exercitado.
+      (!q.orFilters || q.orFilters.some(([c, op, v]) =>
+        op === 'eq' ? String(r[c]) === v : op === 'is' && v === 'null' ? r[c] == null : false));
 
     function run() {
       if (q.op === 'insert' || q.op === 'upsert') {
@@ -106,6 +110,10 @@ function createDb(seed) {
       delete() { q.op = 'delete'; return api; },
       eq(c, v) { q.filters.push([c, v]); return api; },
       in(c, v) { q.inFilter = [c, v]; return api; },
+      or(expr) {
+        q.orFilters = String(expr).split(',').map((p) => { const [c, op, ...v] = p.split('.'); return [c, op, v.join('.')]; });
+        return api;
+      },
       order(c, o) { q.order = [c, !o || o.ascending !== false]; return api; },
       limit(n) { q.limit = n; return api; },
       maybeSingle() { q.single = 'maybe'; return api; },
@@ -173,16 +181,35 @@ function onLoad(w, ms = 15000) {
 }
 const settle = (ms = 1200) => new Promise((r) => setTimeout(r, ms));
 
+// r126b/r156: um `throw` dentro de função `async` do app vira promessa rejeitada SEM tratamento, e
+// o Node encerra o processo com código 1 — o mesmo de "N asserções falharam" — sem rodar o resto.
+// O ouvinte `unhandledrejection` da JANELA nunca dispara no jsdom (r156a): é pelo do PROCESSO.
+// E o Node só o entrega na fronteira de macrotarefa (r156b): sem `drenar()` antes de cobrar, a
+// rejeição cai no próximo cenário que tiver um setTimeout e o ✗ acusa o cenário errado.
+// Cobrança por cenário E na checagem final: só por cenário deixaria a rejeição de quem não cobra
+// sumir em silêncio — o arreio ficaria MENOS sensível do que sem handler (r126b).
+let cenarioAtivo = '(fora de cenário)';
+const rejeicoes = [];
+process.on('unhandledRejection', (e) => {
+  rejeicoes.push({ cenario: cenarioAtivo, msg: String((e && e.stack) || e).split('\n').slice(0, 2).join(' | ') });
+});
+const drenar = () => new Promise((r) => setImmediate(r));
+
 async function bootDevice(initialState, html) {
-  const dom = new JSDOM(html || HTML, {
-    url: PAGE_URL,
-    runScripts: 'dangerously',
-    pretendToBeVisual: true,
-    beforeParse: (w) => stubWindow(w, initialState),
-  });
-  await onLoad(dom.window);
-  await settle(1500); // r38(b): cobre o debounce de 800ms do push de settings
-  return dom;
+  const antes = cenarioAtivo;
+  cenarioAtivo = antes + ' › boot'; // no INÍCIO: a rejeição do boot chega enquanto ele espera o load
+  try {
+    const dom = new JSDOM(html || HTML, {
+      url: PAGE_URL,
+      runScripts: 'dangerously',
+      pretendToBeVisual: true,
+      beforeParse: (w) => stubWindow(w, initialState),
+    });
+    await onLoad(dom.window);
+    await settle(1500); // r38(b): cobre o debounce de 800ms do push de settings
+    await drenar();
+    return dom;
+  } finally { cenarioAtivo = antes; }
 }
 
 // r69(c): o aparelho que ainda não atualizou GRAVA CEGO durante o rollout. O que decide se ele só
@@ -221,8 +248,24 @@ function harnessQuebrou(onde, e) {
 }
 async function suite(name, fn) {
   console.log('\n▸ ' + name);
+  cenarioAtivo = name;
   try { await fn(); }
   catch (e) { harnessQuebrou(name, e); }
+  await drenar();
+  const minhas = rejeicoes.filter((r) => r.cenario === name || r.cenario.startsWith(name + ' › '));
+  minhas.forEach((r) => { r.cobrada = true; });
+  check('nenhuma promessa rejeitada sem tratamento no cenário', minhas.length === 0,
+    minhas.map((r) => r.cenario + ': ' + r.msg).join('\n      '));
+  cenarioAtivo = '(fora de cenário)';
+}
+// Final (r126b): pega a rejeição de fora de cenário (boot do `pc`) e a que chegou tarde demais para
+// o próprio cenário — esta última já teria dado ✗ lá se tivesse chegado a tempo.
+async function checagemFinal() {
+  await drenar(); await settle(50); await drenar();
+  const soltas = rejeicoes.filter((r) => !r.cobrada);
+  check(`nenhuma promessa rejeitada sem tratamento em toda a bateria (${rejeicoes.length} no total)`,
+    rejeicoes.length === 0,
+    (soltas.length ? 'não cobradas por cenário: ' : '') + rejeicoes.map((r) => r.cenario + ': ' + r.msg).join('\n      '));
 }
 function veredito() {
   console.log('\n────────────────────────────────');
@@ -368,6 +411,102 @@ function veredito() {
     check('tema nas duas formas + fundo de token no body',
       /@media\s*\(prefers-color-scheme:dark\)/.test(P) && /:root\[data-theme="dark"\]/.test(P) &&
       /body\{[^}]*background:var\(--paper\)/.test(P));
+  });
+
+  // r147/§8: o `sw.js` DE VERDADE num `vm`, com caches/fetch/relógio falsos. "Offline" não é o caso
+  // difícil — sinal fraco é: sem tempo-limite a abertura esperava o fetch desistir. E um 500 passageiro
+  // gravado no cache tirava o app bom de lá. Ler o arquivo não prova nada disso; rodá-lo, sim.
+  await suite('Service Worker — tempo-limite, só resposta boa no cache, ignoreSearch (r147)', async () => {
+    const ORIGEM = 'https://magoc25.github.io';
+    const APP = ORIGEM + '/KidsTasks-App/KidsTasks.html';
+    const semQuery = (u) => u.split('#')[0].split('?')[0];
+    function montar() {
+      const h = {}, timers = [], store = new Map();
+      const rede = { proximo: null };
+      const caches = {
+        async open() { return { put: async (req, resp) => { store.set(req.url || req, await resp.text()); } }; },
+        async match(req, o) {
+          const alvo = (o && o.ignoreSearch) ? semQuery(req.url) : req.url;
+          for (const [k, v] of store) if (((o && o.ignoreSearch) ? semQuery(k) : k) === alvo) return new Response(v, { status: 200 });
+          return undefined;
+        },
+        async keys() { return []; }, async delete() { return true; },
+      };
+      const ctx = {
+        self: { location: { origin: ORIGEM }, addEventListener: (t, fn) => { h[t] = fn; }, skipWaiting() {} },
+        caches, clients: { claim: async () => {} }, Response, Promise, URL, Error,
+        console: { log() {}, warn() {}, error() {} },
+        fetch: () => rede.proximo(),
+        setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {},
+      };
+      ctx.self.caches = caches;
+      vm.createContext(ctx);
+      // KT_SW: roda a suíte contra outro sw.js (baseline/mutação: `git show HEAD~1:sw.js > old-sw.js`).
+      new vm.Script(fs.readFileSync(process.env.KT_SW || path.join(ROOT, 'sw.js'), 'utf8')).runInContext(ctx);
+      function pedir(url, mode) {
+        const ev = { request: { method: 'GET', url, mode: mode || 'navigate' }, resposta: null, extras: [],
+          respondWith(p) { this.resposta = p; }, waitUntil(p) { this.extras.push(p); } };
+        h.fetch(ev);
+        return ev;
+      }
+      const disparaRelogio = () => timers.splice(0).forEach((t) => t.fn());
+      // Prazo REAL na leitura: contra um SW sem tempo-limite, a rede que nunca responde penduraria a
+      // bateria inteira — e o processo sairia calado, sem veredito. Pendurar é o próprio ✗.
+      const corpo = async (ev) => {
+        const r = await Promise.race([ev.resposta, new Promise((ok) => setTimeout(() => ok('PENDUROU'), 1500))]);
+        if (r === 'PENDUROU') return 'PENDUROU';
+        return r ? r.status + ':' + (await r.text()) : '∅';
+      };
+      const esvazia = async (ev) => { await Promise.all(ev.extras.map((p) => p.catch(() => {}))); await drenar(); };
+      return { h, timers, store, rede, pedir, disparaRelogio, corpo, esvazia };
+    }
+
+    // 1. Online: serve a rede e guarda a cópia.
+    let s = montar();
+    s.rede.proximo = async () => new Response('APP-novo', { status: 200 });
+    let ev = s.pedir(APP);
+    check('online → serve a rede', (await s.corpo(ev)) === '200:APP-novo');
+    await s.esvazia(ev);
+    check('online → a cópia entrou no cache', s.store.get(APP) === 'APP-novo');
+
+    // 2. Servidor devolve 500 com cópia boa: serve a cópia e NÃO a substitui.
+    s.rede.proximo = async () => new Response('ERRO', { status: 500 });
+    ev = s.pedir(APP);
+    check('500 com cópia boa → serve a cópia', (await s.corpo(ev)) === '200:APP-novo');
+    await s.esvazia(ev);
+    check('500 não substitui o app bom no cache', s.store.get(APP) === 'APP-novo', 'cache: ' + s.store.get(APP));
+
+    // 3. Sinal fraco: a rede nunca responde. O tempo-limite tem de existir, ser curto e servir a cópia.
+    s.rede.proximo = () => new Promise(() => {});
+    s.timers.length = 0; // só os timers DESTE pedido (os anteriores já não importam)
+    ev = s.pedir(APP);
+    const prazo = s.timers.map((t) => t.ms);
+    check('a abertura arma um tempo-limite de no máximo 5 s', prazo.length === 1 && prazo[0] > 0 && prazo[0] <= 5000,
+      'timers: ' + JSON.stringify(prazo));
+    s.disparaRelogio();
+    check('estourado o prazo → serve a cópia do cache', (await s.corpo(ev)) === '200:APP-novo');
+
+    // 4. Offline com query (?utm=…): ignoreSearch acha o app.
+    s.rede.proximo = async () => { throw new TypeError('Failed to fetch'); };
+    ev = s.pedir(APP + '?utm_source=qr');
+    check('offline com ?query → abre pela cópia (ignoreSearch)', (await s.corpo(ev)) === '200:APP-novo');
+
+    // 5. Offline sem cópia nenhuma: 503 "Offline", sem estourar.
+    s = montar();
+    s.rede.proximo = async () => { throw new TypeError('Failed to fetch'); };
+    ev = s.pedir(APP);
+    check('offline sem cópia → 503 Offline', (await s.corpo(ev)) === '503:Offline');
+
+    // 6. Recurso cache-first (ícone) com 404: não pode ficar gravado até o próximo bump.
+    s = montar();
+    s.rede.proximo = async () => new Response('nao achei', { status: 404 });
+    ev = s.pedir(ORIGEM + '/KidsTasks-App/icon-192.png', 'no-cors');
+    await s.corpo(ev); await drenar();
+    check('ícone com 404 não entra no cache', s.store.size === 0, 'cache: ' + JSON.stringify([...s.store.keys()]));
+
+    // 7. Outra origem (Supabase, CDN): o SW não responde — leitura da nuvem nunca vem do cache (r138c).
+    ev = s.pedir('https://fake-pessoal.supabase.co/rest/v1/families?select=settings', 'cors');
+    check('outra origem passa direto (sem respondWith)', ev.resposta === null);
   });
 
   if (!JSDOM) {
@@ -819,6 +958,80 @@ function veredito() {
     dev.window.close();
   });
 
+  // r135b/r155c: a ordem arrastada vivia só no aparelho do arraste — sem erro e sem relato, porque
+  // nada falha: o outro aparelho simplesmente nunca a recebe. Os três caminhos que a levam: o push
+  // (que tem de redesenhar, r138d), a carga (que reaplica depois de recarregar as tarefas) e o
+  // desempate (sem ele, duas ordens com o mesmo carimbo ficam cada uma no seu aparelho para sempre).
+  const TAREFAS = () => ['t1', 't2', 't3'].map((id, i) =>
+    ({ id, title: 'Tarefa ' + (i + 1), points: 1, frequency: 'daily', days: [], icon: '✅', childId: 'ana' }));
+  const ordemDe = (dom) => ev(dom, "state.tasks.map(function(t){return String(t.id)}).join(',')");
+  const ordemNaTela = (dom) => ev(dom, "Array.prototype.map.call(document.querySelectorAll('#tasksBody tr[data-task-id]'),function(r){return r.dataset.taskId}).join(',')");
+  const comTarefas = (extra) => Object.assign({ familyId: 'fam1', familyName: 'Família Teste', childId: 'ana', tasks: TAREFAS() }, extra || {});
+
+  await suite('r135b — a ordem arrastada chega ao outro aparelho (push e carga)', async () => {
+    shared.tables.families[0].settings = null;
+    const a = await bootDevice(comTarefas());
+    const b = await bootDevice(comTarefas());
+    check('os dois começam na ordem de criação', ordemDe(a) === 't1,t2,t3' && ordemDe(b) === 't1,t2,t3');
+
+    // O arraste, pelo mesmo efeito do onUp do drag & drop: reordena e grava taskOrder.
+    ev(a, "var t=state.tasks; state.tasks=[t[2],t[0],t[1]]; state.taskOrder=state.tasks.map(function(x){return String(x.id)}); saveState(); renderAll();");
+    await settle(1400);
+    const nuvem = cloudSettings() || {};
+    check('a ordem chega à nuvem, carimbada', JSON.stringify((nuvem.values || {}).taskOrder) === '["t3","t1","t2"]' &&
+      ((nuvem.meta || {}).taskOrder || 0) > 0, 'nuvem: ' + JSON.stringify({ v: (nuvem.values || {}).taskOrder, m: (nuvem.meta || {}).taskOrder }));
+
+    // Push do outro aparelho (o caminho que roda depois de qualquer save): funde E redesenha.
+    await ev(b, 'pushSettingsToSupabase()');
+    await drenar();
+    check('push: o outro aparelho adota a ordem', ordemDe(b) === 't3,t1,t2', 'b: ' + ordemDe(b));
+    check('push: e a TELA mostra a ordem nova (a fusão redesenha, r138d)', ordemNaTela(b) === 't3,t1,t2', 'tela: ' + ordemNaTela(b));
+
+    // Carga: aparelho que abre depois, com uma tarefa que a ordem vencedora não conhece.
+    const c = await bootDevice(comTarefas({ tasks: TAREFAS().concat([{ id: 't4', title: 'Nova', points: 1, frequency: 'daily', days: [], icon: '✅', childId: 'ana' }]) }));
+    check('carga: quem abre depois já vem na ordem arrastada, e a tarefa desconhecida vai para o fim',
+      ordemDe(c) === 't3,t1,t2,t4', 'c: ' + ordemDe(c));
+    check('carga: a tela também', ordemNaTela(c) === 't3,t1,t2,t4', 'tela: ' + ordemNaTela(c));
+    [a, b, c].forEach((d) => d.window.close());
+  });
+
+  await suite('r135b — empate de carimbo com ordens diferentes converge (não fica "cada um com a sua")', async () => {
+    shared.tables.families[0].settings = null;
+    const a = await bootDevice(comTarefas());
+    const b = await bootDevice(comTarefas());
+    const fixa = (d, ordem) => ev(d, "state.taskOrder=" + JSON.stringify(ordem) +
+      "; state.settingsMeta.taskOrder=1000; _settingsSnapshot=_snapSettings(); applyTaskOrder();");
+    fixa(a, ['t2', 't1', 't3']);
+    fixa(b, ['t1', 't3', 't2']);
+    for (let i = 0; i < 3; i++) { await ev(a, 'syncSettingsWithSupabase()'); await ev(b, 'syncSettingsWithSupabase()'); }
+    const oa = JSON.stringify(ev(a, 'state.taskOrder')), ob = JSON.stringify(ev(b, 'state.taskOrder'));
+    const on = JSON.stringify(((cloudSettings() || {}).values || {}).taskOrder);
+    check('em ≤ 3 rodadas os dois aparelhos e a nuvem ficam com a MESMA ordem', oa === ob && ob === on,
+      `a=${oa} b=${ob} nuvem=${on}`);
+    check('e é a escolha determinística (a sequência menor), não a do último a gravar', oa === '["t1","t3","t2"]', 'a=' + oa);
+    check('a fusão não recarimbou a ordem que veio de fora',
+      ev(a, 'state.settingsMeta.taskOrder') === 1000 && ev(b, 'state.settingsMeta.taskOrder') === 1000,
+      `a=${ev(a, 'state.settingsMeta.taskOrder')} b=${ev(b, 'state.settingsMeta.taskOrder')}`);
+    a.window.close(); b.window.close();
+  });
+
+  await suite('Semeadura por chave — aparelho já semeado carimba a ordem que já tinha (e só ela)', async () => {
+    shared.tables.families[0].settings = null;
+    const d = await bootDevice(comTarefas({ taskOrder: ['t3', 't1', 't2'], settingsMetaSeeded: true, settingsMeta: { pointValueBRL: 555 } }));
+    check('a ordem arrumada antes da atualização ganhou carimbo', (ev(d, 'state.settingsMeta.taskOrder') || 0) > 0);
+    check('as 8 configs já semeadas não foram recarimbadas', ev(d, 'state.settingsMeta.pointValueBRL') === 555,
+      'pointValueBRL: ' + ev(d, 'state.settingsMeta.pointValueBRL'));
+    check('o registro de semeadura agora inclui taskOrder', ev(d, "(state.settingsSeededKeys||[]).indexOf('taskOrder')>=0"));
+    d.window.close();
+    // r42: quem está no padrão (ordem vazia) não carimba nada e nunca sobrescreve o outro. Nuvem
+    // zerada antes: senão ele puxa a ordem que o `d` acabou de publicar, e o carimbo viria de fora.
+    shared.tables.families[0].settings = null;
+    const e = await bootDevice(comTarefas({ settingsMetaSeeded: true }));
+    check('aparelho sem ordem arrastada não carimba taskOrder (r42)', !ev(e, 'state.settingsMeta.taskOrder'),
+      'carimbo: ' + ev(e, 'state.settingsMeta.taskOrder') + ' ordem: ' + JSON.stringify(ev(e, 'state.taskOrder')));
+    e.window.close();
+  });
+
   await suite('r36(b) — coluna `settings` ausente degrada para local-only', async () => {
     const original = shared.from;
     shared.from = (t) => {
@@ -837,5 +1050,7 @@ function veredito() {
   });
 
   pc.window.close();
+  console.log('\n▸ Checagem final — rejeições sem tratamento (r126b/r156)');
+  await checagemFinal();
   veredito();
 })().catch((e) => { harnessQuebrou('fora de suíte (boot?)', e); veredito(); });

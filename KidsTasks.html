@@ -1215,13 +1215,20 @@ function instancesForChild(cid){
 // (criança ativa neste device), os colapsos de UI, childLevelSeen (celebração de nível) e as
 // chaves do Supabase. Formato versionado {v,values,meta}: `meta` guarda o carimbo POR CHAVE, para
 // que um aparelho que nunca mexeu numa config não empurre o próprio padrão por cima do outro.
-const SYNCED_SETTINGS=['pointValueBRL','weekMode','showMoneyToChild','levelThresholds','childGender','childPixKeys','parentPin','parentPinEnabled'];
+const SYNCED_SETTINGS=['pointValueBRL','weekMode','showMoneyToChild','levelThresholds','childGender','childPixKeys','parentPin','parentPinEnabled','taskOrder'];
 // Mapas por criança são COLEÇÃO, não valor único: o merge une por id e carimba por ENTRADA.
 // Substituir o mapa inteiro (last-write-wins) apaga em silêncio a criança que só o outro aparelho
 // conhecia — o PC configura a Ana, o celular (que ainda não puxou) configura o Bruno e publica
 // {bruno}, e a Ana some no pull seguinte. Sem tombstone porque o app não remove criança; se um dia
 // remover, a exclusão precisa de carimbo próprio para não ser ressuscitada pelo outro aparelho.
 const MAP_SETTINGS=new Set(['childGender','childPixKeys']);
+// A ORDEM também é dado (guia r135b/r155c): a das tarefas arrastadas vivia só no aparelho do
+// arraste e nunca chegava ao outro — sem erro, sem relato. Viaja como valor único com carimbo
+// próprio, e o carimbo nasce só no arraste (único ponto que escreve `taskOrder`), ou seja, quando a
+// ordem RELATIVA muda; tarefa nova ou apagada não mexe nele. Tarefa que a ordem vencedora não
+// conhece vai para o fim (`applyTaskOrder`). Empate de carimbo decide de forma DETERMINÍSTICA,
+// nunca "a local": senão cada aparelho fica com a sua para sempre.
+const ORDER_SETTINGS=new Set(['taskOrder']);
 let _settingsPushTimer=null;
 // Supabase sem o ALTER TABLE: degrada para local-only em vez de derrubar o resto do sync.
 let _settingsColumnMissing=false;
@@ -1267,11 +1274,17 @@ function stampSettingChanges(){
 // Aparelho que já tinha config personalizada não tem carimbo algum: sem isto o valor escolhido
 // empataria com o padrão do outro device e o merge não saberia quem vence. Carimba só o que
 // difere do padrão — quem está todo no padrão não carimba nada e nunca sobrescreve o outro.
+// Semeia POR CHAVE: a config que entrar no sync depois (ex.: `taskOrder`) também é carimbada no
+// aparelho que já tinha sido semeado — senão a ordem arrumada antes da atualização ficaria sem
+// carimbo e só viajaria no próximo arraste. Aparelho semeado antes desta lista: as 8 de então.
+const _SEEDED_ANTES=['pointValueBRL','weekMode','showMoneyToChild','levelThresholds','childGender','childPixKeys','parentPin','parentPinEnabled'];
 function seedSettingsMeta(){
-  if(state.settingsMetaSeeded) return;
+  const feitas=new Set(Array.isArray(state.settingsSeededKeys)?state.settingsSeededKeys:(state.settingsMetaSeeded?_SEEDED_ANTES:[]));
+  const faltam=SYNCED_SETTINGS.filter(k=>!feitas.has(k));
+  if(!faltam.length) return;
   if(!state.settingsMeta) state.settingsMeta={};
   const now=Date.now();
-  for(const k of SYNCED_SETTINGS){
+  for(const k of faltam){
     if(MAP_SETTINGS.has(k)){
       // O mapa nasce vazio no padrão: toda entrada que existe aqui foi configurada por alguém.
       const meta=_mapMeta(k);
@@ -1282,7 +1295,7 @@ function seedSettingsMeta(){
     if(state.settingsMeta[k]) continue;
     if(JSON.stringify(state[k]??null)!==JSON.stringify(defaultState[k]??null)) state.settingsMeta[k]=now;
   }
-  state.settingsMetaSeeded=true; saveState();
+  state.settingsMetaSeeded=true; state.settingsSeededKeys=SYNCED_SETTINGS.slice(); saveState();
 }
 function buildSettingsPayload(){
   const values={},meta={};
@@ -1315,8 +1328,12 @@ function mergeRemoteSettings(remote){
       if(hit){ state[k]=lmap; touched=true; }
       continue;
     }
-    if((rm[k]||0)<=(state.settingsMeta[k]||0)) continue;
-    state[k]=rv[k]; state.settingsMeta[k]=rm[k]; touched=true;
+    const rts=rm[k]||0, lts=state.settingsMeta[k]||0;
+    // Desempate só com carimbo dos DOIS lados (>0): sem carimbo continua valendo o r42 — quem nunca
+    // mexeu não empurra o próprio padrão por cima de ninguém.
+    const empateOrdem=ORDER_SETTINGS.has(k)&&rts>0&&rts===lts&&JSON.stringify(rv[k]??null)<JSON.stringify(state[k]??null);
+    if(rts<=lts&&!empateOrdem) continue;
+    state[k]=rv[k]; state.settingsMeta[k]=rts; touched=true;
   }
   // Valor veio do remoto: refotografa para o diff não confundir com edição local e recarimbar.
   if(touched) _settingsSnapshot=_snapSettings();
@@ -1352,7 +1369,9 @@ async function _syncSettingsReadWrite(){
 async function pushSettingsToSupabase(){
   if(!supabaseClient||!state.familyId||_settingsColumnMissing) return;
   try{
-    await _syncSettingsReadWrite();
+    // A fusão TEM de redesenhar (r138d): os caminhos de carga já redesenham depois de recarregar as
+    // tarefas, mas este (o push depois de um save) é o único que pode trazer config nova sem tela.
+    if(await _syncSettingsReadWrite()){ applyTaskOrder(); saveState(); renderAll(); }
   }catch(e){
     if(/settings/i.test(e&&e.message||'')){ _settingsColumnMissing=true; console.warn('[Settings] coluna `settings` ausente no Supabase — configurações seguem locais até o ALTER TABLE'); return; }
     console.warn('[Settings] push',e);
@@ -1561,16 +1580,22 @@ async function loadTasksFromSupabase(){
   const incomingIds=new Set(mapped.map(t=>String(t.id)));
   state.tasks = (state.tasks||[]).filter(t => !(isUuidLike(String(t.id)) && (incomingIds.has(String(t.id)) || t.childId===state.childId)));
   state.tasks.push(...mapped);
-  // Reaplica a ordem salva pelo drag & drop (taskOrder) após carga do Supabase
-  if((state.taskOrder||[]).length){
-    const om=new Map(state.taskOrder.map((id,i)=>[id,i]));
-    state.tasks.sort((a,b)=>{
-      const ai=om.has(String(a.id))?om.get(String(a.id)):Infinity;
-      const bi=om.has(String(b.id))?om.get(String(b.id)):Infinity;
-      return ai-bi;
-    });
-  }
+  applyTaskOrder();
   saveState();
+}
+// Reaplica a ordem do drag & drop (taskOrder). Pela SEQUÊNCIA do array, nunca por Object.keys
+// (r135b). Tarefa que a ordem não conhece (criada noutro aparelho depois do arraste) vai para o
+// fim, na ordem em que já estava — o sort é estável. Devolve se mudou algo.
+function applyTaskOrder(){
+  if(!(state.taskOrder||[]).length||!(state.tasks||[]).length) return false;
+  const antes=state.tasks.map(t=>String(t.id)).join('|');
+  const om=new Map(state.taskOrder.map((id,i)=>[String(id),i]));
+  state.tasks.sort((a,b)=>{
+    const ai=om.has(String(a.id))?om.get(String(a.id)):Infinity;
+    const bi=om.has(String(b.id))?om.get(String(b.id)):Infinity;
+    return ai===bi?0:(ai<bi?-1:1);
+  });
+  return state.tasks.map(t=>String(t.id)).join('|')!==antes;
 }
 
 // Recarrega instâncias da semana anterior do Supabase e re-arquiva para garantir completude
@@ -3296,7 +3321,7 @@ async function importBackup(file){
 }
 
 // Versão deste build — fonte única usada pela checagem de atualização
-const APP_VERSION='2.5.0';
+const APP_VERSION='2.6.0';
 // Compara versões "x.y.z": 1 se a>b, -1 se a<b, 0 se iguais (ignora 'v', partes faltando ou lixo)
 function cmpVersion(a,b){
   const pa=String(a).replace(/^v/,'').split('.').map(n=>parseInt(n,10)||0);
